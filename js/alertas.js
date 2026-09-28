@@ -1,7 +1,7 @@
 // js/alertas.js
 //
 // ============================================================
-// Sistema de Alerta Meteorológica — v3.1
+// Sistema de Alerta Meteorológica — v3.2
 // ------------------------------------------------------------
 // - Soporta MÚLTIPLES zonas activas simultáneamente.
 // - Cola FIFO de banners (uno por zona, secuencial).
@@ -10,6 +10,8 @@
 // - Cuando todas las zonas vuelven a VERDE → "Libre de alertas".
 // - Cada zona tiene su propio contador sincronizado.
 // - Mapa: N polígonos (delegado a map.js v3).
+// - Click en barra superior reabre el overlay (libre o alerta).
+// - El overlay en estado "libre" no se reabre solo tras cerrarlo.
 // ============================================================
 
 import { reproducirSonidoAlerta, detenerSonidoAlerta } from "./notifications.js";
@@ -114,7 +116,6 @@ const SVG_RAYO = `
 // ----------------------------------------------------------
 // ESTADO INTERNO — Múltiples zonas activas
 // ----------------------------------------------------------
-let libreYaCerradoPorUsuario = false;
 const estado = {
     zonasActivas: new Map(),
     colaBanners: [],
@@ -122,6 +123,10 @@ const estado = {
     intervalContador: null,
     intervalTimestamp: null
 };
+
+// Bandera: el usuario ya cerró el overlay en estado "Libre de alertas".
+// Evita que el ciclo de estado-cliente.js lo reabra automáticamente.
+let libreYaCerradoPorUsuario = false;
 
 // ----------------------------------------------------------
 // DURACIÓN DEL TIMER DE ALERTA (default)
@@ -217,9 +222,9 @@ function asegurarEstructuraDOM() {
         e.stopPropagation();
         ocultarBarraSuperior();
     });
-    document.getElementById("al-barra-superior").addEventListener("click", () => ());
+    document.getElementById("al-barra-superior").addEventListener("click", () => abrirBannerDeNuevo());
     document.getElementById("al-tarjeta-cerrar").addEventListener("click", () => ocultarTarjeta());
-    document.getElementById("al-tarjeta-btn").addEventListener("click", () => ());
+    document.getElementById("al-tarjeta-btn").addEventListener("click", () => abrirBannerDeNuevo());
 
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
@@ -249,7 +254,8 @@ async function obtenerModuloMapa() {
 // ==========================================================
 export async function mostrarAlertaCompleta(datos = {}) {
     try {
-        libreYaCerradoPorUsuario = false;
+        libreYaCerradoPorUsuario = false; // reset bandera
+
         asegurarEstructuraDOM();
 
         const nivelKey = NIVELES_ALERTA[datos.nivel] ? datos.nivel : "roja";
@@ -477,13 +483,11 @@ function cerrarBannerActual() {
     if (estado.colaBanners.length > 0) {
         setTimeout(() => mostrarSiguienteBanner(), 400);
     } else if (habiaZonas) {
-        // Había alertas y ya no queda ninguna en cola → volver a libre
-        // (solo si realmente se resolvieron todas)
+        // Había zonas activas: solo actualizar barra/tarjeta
         actualizarBarraYTarjetaAgregadas();
     } else {
-        // Estado "Libre de alertas": solo cerrar, sin reabrir.
-        // La barra y la tarjeta verde ya están visibles de forma
-        // persistente; no hace falta reabrir el overlay.
+        // Estado "Libre de alertas": marcar que el usuario ya cerró
+        // para que estado-cliente.js no lo reabra cada 30 s.
         libreYaCerradoPorUsuario = true;
         mostrarBarraTarjetaLibre();
     }
@@ -493,6 +497,58 @@ function cerrarBanner() {
     const overlay = document.getElementById("al-overlay");
     overlay?.classList.remove("al-visible");
     overlay?.classList.remove("al-libre");
+}
+
+// ==========================================================
+// ABRIR OVERLAY LIBRE (a demanda, sin respetar la bandera)
+// ==========================================================
+// Se llama desde abrirBannerDeNuevo() cuando no hay zonas activas.
+// A diferencia de mostrarAlertaLibre(), NO mira la bandera
+// libreYaCerradoPorUsuario: siempre reabre el overlay.
+function abrirOverlayLibre() {
+    try {
+        asegurarEstructuraDOM();
+
+        const nivel = NIVELES_ALERTA.vigilancia;
+
+        const vars = [
+            ["--al-color", nivel.color],
+            ["--al-color-dark", nivel.colorDark],
+            ["--al-glow", nivel.glow]
+        ];
+        const aplicarVars = (el) => {
+            if (!el) return;
+            vars.forEach(([k, v]) => el.style.setProperty(k, v));
+        };
+        aplicarVars(document.getElementById("al-overlay"));
+        aplicarVars(document.getElementById("al-panel"));
+        aplicarVars(document.getElementById("al-modal-seguridad"));
+
+        document.getElementById("al-icono-big").textContent = "✅";
+        document.getElementById("al-nivel-badge").textContent = "VIGILANCIA";
+        document.getElementById("al-nivel-badge").style.background = nivel.color;
+        document.getElementById("al-titulo-texto").textContent = "🟢 LIBRE DE ALERTAS";
+        document.getElementById("al-mensaje-texto").textContent =
+            "No se han emitido alertas meteorológicas. El sistema se encuentra en vigilancia.";
+        document.getElementById("al-recomendacion-texto").textContent =
+            "Manténgase informado sobre el desarrollo del clima.";
+
+        const wrap = document.getElementById("al-contador-wrap");
+        if (wrap) wrap.style.display = "none";
+
+        const panel = document.getElementById("al-panel");
+        panel.classList.remove("al-resplandor-activo", "al-sirena-activa");
+        void panel.offsetWidth;
+
+        const overlay = document.getElementById("al-overlay");
+        overlay.classList.add("al-visible", "al-libre");
+
+        const cola = document.getElementById("al-cola-indicador");
+        if (cola) cola.style.display = "none";
+
+    } catch (e) {
+        console.error("alertas.js: error al abrir overlay libre", e);
+    }
 }
 
 // ==========================================================
@@ -702,15 +758,18 @@ export function mostrarBarraTarjetaLibre() {
 }
 
 // ==========================================================
-// MOSTRAR ESTADO "LIBRE DE ALERTAS"
+// MOSTRAR ESTADO "LIBRE DE ALERTAS" (idempotente)
 // ==========================================================
 export function mostrarAlertaLibre() {
     try {
+        // Si el usuario ya cerró el overlay en estado libre,
+        // no reabrirlo. Solo asegurar barra/tarjeta verdes.
         if (libreYaCerradoPorUsuario) {
             asegurarEstructuraDOM();
             mostrarBarraTarjetaLibre();
             return;
         }
+
         asegurarEstructuraDOM();
         detenerContador();
         detenerSonidoAlerta();
@@ -725,45 +784,10 @@ export function mostrarAlertaLibre() {
         estado.colaBanners = [];
         estado.bannerActual = null;
 
-        const nivel = NIVELES_ALERTA.vigilancia;
-
-        const vars = [
-            ["--al-color", nivel.color],
-            ["--al-color-dark", nivel.colorDark],
-            ["--al-glow", nivel.glow]
-        ];
-        const aplicarVars = (el) => {
-            if (!el) return;
-            vars.forEach(([k, v]) => el.style.setProperty(k, v));
-        };
-        aplicarVars(document.getElementById("al-overlay"));
-        aplicarVars(document.getElementById("al-panel"));
-        aplicarVars(document.getElementById("al-barra-superior"));
-        aplicarVars(document.getElementById("al-tarjeta"));
-        aplicarVars(document.getElementById("al-modal-seguridad"));
-
-        document.getElementById("al-icono-big").textContent = "✅";
-        document.getElementById("al-nivel-badge").textContent = "VIGILANCIA";
-        document.getElementById("al-nivel-badge").style.background = nivel.color;
-        document.getElementById("al-titulo-texto").textContent = "🟢 LIBRE DE ALERTAS";
-        document.getElementById("al-mensaje-texto").textContent =
-            "No se han emitido alertas meteorológicas. El sistema se encuentra en vigilancia.";
-        document.getElementById("al-recomendacion-texto").textContent =
-            "Manténgase informado sobre el desarrollo del clima.";
-
-        const wrap = document.getElementById("al-contador-wrap");
-        if (wrap) wrap.style.display = "none";
-
-        const panel = document.getElementById("al-panel");
-        panel.classList.remove("al-resplandor-activo", "al-sirena-activa");
-        void panel.offsetWidth;
-        const overlay = document.getElementById("al-overlay");
-        overlay.classList.add("al-visible", "al-libre");
-
-        const cola = document.getElementById("al-cola-indicador");
-        if (cola) cola.style.display = "none";
-        // Reusar abrirOverlayLibre para el contenido del overlay
+        // Delegar el contenido del overlay a abrirOverlayLibre()
         abrirOverlayLibre();
+
+        // Asegurar barra/tarjeta verdes visibles
         mostrarBarraTarjetaLibre();
 
         setTimeout(() => document.getElementById("al-btn-cerrar")?.focus(), 1000);
@@ -785,7 +809,7 @@ function verMapaAlerta() {
 }
 
 function abrirBannerDeNuevo() {
-    // Caso 1: hay un banner en curso → si el overlay está oculto, reabrirlo
+    // Caso 1: hay un banner en curso → reabrirlo
     if (estado.bannerActual) {
         const overlay = document.getElementById("al-overlay");
         if (overlay && !overlay.classList.contains("al-visible")) {
@@ -801,18 +825,16 @@ function abrirBannerDeNuevo() {
         return;
     }
 
-    // Caso 2: hay banners en cola → mostrar el siguiente
+    // Caso 2: hay banners en cola
     if (estado.colaBanners.length > 0) {
         mostrarSiguienteBanner();
         return;
     }
 
     // Caso 3: hay zonas activas pero sin banner en curso
-    // (por ejemplo, el usuario cerró todos los banners) → re-encolar
     if (estado.zonasActivas.size > 0) {
         estado.colaBanners = Array.from(estado.zonasActivas.keys());
 
-        // Ordenar por criticidad
         estado.colaBanners.sort((a, b) => {
             const za = estado.zonasActivas.get(a);
             const zb = estado.zonasActivas.get(b);
@@ -824,60 +846,10 @@ function abrirBannerDeNuevo() {
         return;
     }
 
-    // Caso 4: NO hay zonas activas → estado "Libre de alertas"
-    // Reabrir el overlay verde.
+    // Caso 4: no hay zonas activas → overlay "Libre de alertas"
     abrirOverlayLibre();
 }
-//============================================
-//función auxiliar abrirOverlayLibre()
-// ----------------------------------------------------------
-// Reabrir el overlay en estado "Libre de alertas"
-// ----------------------------------------------------------
-function abrirOverlayLibre() {
-    try {
-        asegurarEstructuraDOM();
 
-        const nivel = NIVELES_ALERTA.vigilancia;
-
-        // Aplicar variables CSS
-        const vars = [
-            ["--al-color", nivel.color],
-            ["--al-color-dark", nivel.colorDark],
-            ["--al-glow", nivel.glow]
-        ];
-        const aplicarVars = (el) => {
-            if (!el) return;
-            vars.forEach(([k, v]) => el.style.setProperty(k, v));
-        };
-        aplicarVars(document.getElementById("al-overlay"));
-        aplicarVars(document.getElementById("al-panel"));
-
-        // Contenido del overlay
-        document.getElementById("al-icono-big").textContent = "✅";
-        document.getElementById("al-nivel-badge").textContent = "VIGILANCIA";
-        document.getElementById("al-nivel-badge").style.background = nivel.color;
-        document.getElementById("al-titulo-texto").textContent = "🟢 LIBRE DE ALERTAS";
-        document.getElementById("al-mensaje-texto").textContent =
-            "No se han emitido alertas meteorológicas. El sistema se encuentra en vigilancia.";
-        document.getElementById("al-recomendacion-texto").textContent =
-            "Manténgase informado sobre el desarrollo del clima.";
-
-        // Ocultar contador
-        const wrap = document.getElementById("al-contador-wrap");
-        if (wrap) wrap.style.display = "none";
-
-        // Mostrar overlay en modo libre
-        const panel = document.getElementById("al-panel");
-        panel.classList.remove("al-resplandor-activo", "al-sirena-activa");
-        void panel.offsetWidth;
-
-        const overlay = document.getElementById("al-overlay");
-        overlay.classList.add("al-visible", "al-libre");
-
-    } catch (e) {
-        console.error("alertas.js: error al reabrir overlay libre", e);
-    }
-}
 // ==========================================================
 // MODAL DE MEDIDAS DE SEGURIDAD
 // ==========================================================
@@ -894,6 +866,9 @@ function mostrarModalSeguridad() {
                 if (n.orden > max.orden) max = n;
             }
             nivelKey = Object.keys(NIVELES_ALERTA).find(k => NIVELES_ALERTA[k] === max) || "roja";
+        } else {
+            // Sin zonas: estado libre → nivel vigilancia
+            nivelKey = "vigilancia";
         }
         const nivel = NIVELES_ALERTA[nivelKey];
 
