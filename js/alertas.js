@@ -465,6 +465,8 @@ function pintarBannerDeZona(zona) {
 }
 
 function cerrarBannerActual() {
+    const habiaZonas = estado.zonasActivas.size > 0;
+
     cerrarBanner();
     estado.bannerActual = null;
     detenerContador();
@@ -472,10 +474,15 @@ function cerrarBannerActual() {
 
     if (estado.colaBanners.length > 0) {
         setTimeout(() => mostrarSiguienteBanner(), 400);
-    } else if (estado.zonasActivas.size === 0) {
-        mostrarAlertaLibre();
-    } else {
+    } else if (habiaZonas) {
+        // Había alertas y ya no queda ninguna en cola → volver a libre
+        // (solo si realmente se resolvieron todas)
         actualizarBarraYTarjetaAgregadas();
+    } else {
+        // Estado "Libre de alertas": solo cerrar, sin reabrir.
+        // La barra y la tarjeta verde ya están visibles de forma
+        // persistente; no hace falta reabrir el overlay.
+        mostrarBarraTarjetaLibre();
     }
 }
 
