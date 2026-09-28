@@ -5,12 +5,16 @@
 // mediante Firebase Cloud Messaging (FCM).
 //
 // Usa modales personalizados (no confirm() nativo) para una mejor UX.
+//
+// v2: añade el cliente del scraper Keraunos (modo "admin"), que lee
+// estado.json cada 30 s y dispara alertas automáticas a Firestore.
 
 import { inicializarFirebase } from "./notifications.js";
 import { enviarMensajePush, escucharMensajesPush } from "./mensajes.js";
 import { mostrarToast } from "./notifications.js";
 import { iniciarSesion, cerrarSesion, observarSesion, traducirErrorAuth } from "./auth.js";
 import { mostrarAlertaCompleta, NIVELES_ALERTA } from "./alertas.js";
+import { iniciarEstadoCliente } from "./estado-cliente.js";
 
 // ======================================================
 // Referencias al DOM: login
@@ -126,6 +130,17 @@ async function initFirebase() {
         escucharMensajesPush();
 
         mostrarEstado("Panel listo. Escribe tu mensaje y presiona Enviar.", "");
+
+        // Arrancar el cliente del scraper Keraunos (modo admin).
+        // Lee estado.json cada 30 s y dispara alertas automáticas
+        // a Firestore por cada zona nueva detectada. También dispara
+        // "alerta-resuelta" cuando una zona vuelve a VERDE.
+        try {
+            iniciarEstadoCliente({ modo: "admin" });
+        } catch (e) {
+            console.warn("estado-cliente (admin) no arrancó:", e);
+        }
+
     } catch (error) {
         console.error("Error iniciando Firebase:", error);
         mostrarEstado("Panel listo. Escribe tu mensaje y presiona Enviar.", "");
@@ -231,7 +246,7 @@ tipoSelector?.addEventListener("change", () => {
 selectNivel?.addEventListener("change", actualizarNivelPreview);
 
 // Rellenar coordenadas automáticamente según la zona seleccionada.
-// Las 3 zonas oficiales de Antamina tienen coordenadas predefinidas
+// Las 4 zonas oficiales de Antamina tienen coordenadas predefinidas
 // que coinciden con los polígonos de zonas.json, de modo que el mapa
 // ilumine el área correcta al emitir la alerta.
 const COORDENADAS_ZONAS = {
