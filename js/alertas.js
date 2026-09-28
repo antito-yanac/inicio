@@ -333,7 +333,7 @@ export async function mostrarAlertaCompleta(datos = {}) {
         }
 
         // Actualizar la barra superior y la tarjeta flotante agregadas
-        actualizarBarraY TarjetaAgregadas();
+        actualizarBarraYTarjetaAgregadas();
 
         // Reproducir sonido (solo si es alerta nueva y no vigilancia)
         if (!yaExistia && nivelKey !== "vigilancia") {
@@ -346,9 +346,9 @@ export async function mostrarAlertaCompleta(datos = {}) {
 }
 
 // Typo-fix: la función se llama actualizarBarraYTarjetaAgregadas
-//function actualizarBarraY TarjetaAgregadas() {
-//    actualizarBarraYTarjetaAgregadas();
-//}
+function actualizarBarraYTarjetaAgregadas() {
+    actualizarBarraYTarjetaAgregadas();
+}
 
 // ==========================================================
 // API PÚBLICA: quitarAlerta(distrito)
