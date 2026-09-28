@@ -117,12 +117,12 @@
    8. EFECTO SIRENA — borde del panel rojo↔naranja cada segundo
    ============================================================ */
 @keyframes al-sirena-borde {
-    0%, 100% { border-color: #e74c3c; }
-    50%      { border-color: #e67e22; }
+    0%, 100% { border-color: var(--al-color, #e74c3c); }
+    50%      { border-color: var(--al-color-dark, #c0392b); }
 }
 
 .al-panel.al-sirena-activa {
-    border: 4px solid #e74c3c;
+    border: 4px solid var(--al-color, #e74c3c);
     animation: al-bajar-rebote 0.9s cubic-bezier(0.22,1.2,0.36,1) forwards,
                al-sirena-borde 1s steps(1, end) 1s infinite,
                al-resplandor 2.4s ease-in-out 1.4s infinite;
