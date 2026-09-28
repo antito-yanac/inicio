@@ -802,9 +802,16 @@ export function mostrarAlertaLibre() {
 // ==========================================================
 function verMapaAlerta() {
     try {
-        cerrarBanner();
-        const mapEl = document.getElementById("map");
-        if (mapEl) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Cerrar overlay visualmente
+        const overlay = document.getElementById("al-overlay");
+        overlay?.classList.remove("al-visible");
+        overlay?.classList.remove("al-libre");
+
+        // Pequeña espera para que la transición de cierre se vea bien
+        setTimeout(() => {
+            const mapEl = document.getElementById("map");
+            if (mapEl) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 150);
     } catch (e) {}
 }
 
