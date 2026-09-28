@@ -1,7 +1,10 @@
 //======================================================
 // Buscador Lugares Antamina 2026
 // Archivo principal
-//======================================================
+//
+// v2: añade el cliente del scraper Keraunos (modo "index"),
+// que actúa como RESPALDO si admin.html no está abierto.
+// ======================================================
 
 import { cargarLugares } from "./data.js";
 import { crearBuscador, teclado } from "./search.js";
@@ -9,6 +12,7 @@ import { crearMapa } from "./map.js";
 import { inicializarFirebase } from "./notifications.js";
 import { escucharMensajesPush } from "./mensajes.js";
 import { mostrarAlertaCompleta, cerrarAlertaTotal, mostrarAlertaLibre } from "./alertas.js";
+import { iniciarEstadoCliente } from "./estado-cliente.js";
 
 //======================================================
 // Referencias HTML
@@ -52,6 +56,15 @@ async function iniciar() {
         // Habilitar Firebase Messaging de forma silenciosa (permiso +
         // Service Worker + token). No muestra toasts de estado.
         inicializarFirebase().catch(err => console.warn("Firebase:", err.message));
+
+        // Respaldo del cliente Keraunos: si admin.html NO está abierto,
+        // leemos estado.json nosotros mismos y mostramos las alertas
+        // directamente (sin pasar por Firestore).
+        try {
+            iniciarEstadoCliente({ modo: "index" });
+        } catch (e) {
+            console.warn("estado-cliente (index) no arrancó:", e);
+        }
 
     } catch (error) {
 
@@ -178,7 +191,7 @@ async function consultarEstadoAlerta() {
                         // (15 min) para que el contador se sincronice entre todos
                         // los navegadores y llegue a cero al mismo tiempo.
                         mostrarAlertaCompleta({
-                            nivel:           data.nivel || "emergencia",
+                            nivel:           data.nivel || "roja",
                             titulo:          data.titulo || "⚡ ALERTA DE TORMENTA ELÉCTRICA",
                             mensaje:         data.cuerpo || "",
                             distrito:        data.distrito || "",
@@ -186,14 +199,17 @@ async function consultarEstadoAlerta() {
                             lat:             (typeof data.lat === "number") ? data.lat : null,
                             lng:             (typeof data.lng === "number") ? data.lng : null,
                             duracionMin:     data.duracionMin || 15,
-                            timestampInicio: timestampInicio
+                            timestampInicio: timestampInicio,
+                            sectorOriginal:  data.sectorOriginal || null,
+                            inicio:          data.inicio || null,
+                            fin:             data.fin || null
                         });
                         return;
                     }
                 } else {
                     // Sin timestamp, mostrar la alerta igual (contador local)
                     mostrarAlertaCompleta({
-                        nivel:           data.nivel || "emergencia",
+                        nivel:           data.nivel || "roja",
                         titulo:          data.titulo || "⚡ ALERTA DE TORMENTA ELÉCTRICA",
                         mensaje:         data.cuerpo || "",
                         distrito:        data.distrito || "",
@@ -201,7 +217,10 @@ async function consultarEstadoAlerta() {
                         lat:             (typeof data.lat === "number") ? data.lat : null,
                         lng:             (typeof data.lng === "number") ? data.lng : null,
                         duracionMin:     data.duracionMin || 15,
-                        timestampInicio: fechaDoc
+                        timestampInicio: fechaDoc,
+                        sectorOriginal:  data.sectorOriginal || null,
+                        inicio:          data.inicio || null,
+                        fin:             data.fin || null
                     });
                     return;
                 }
