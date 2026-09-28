@@ -217,9 +217,9 @@ function asegurarEstructuraDOM() {
         e.stopPropagation();
         ocultarBarraSuperior();
     });
-    document.getElementById("al-barra-superior").addEventListener("click", () => abrirBannerDeNuevo());
+    document.getElementById("al-barra-superior").addEventListener("click", () => ());
     document.getElementById("al-tarjeta-cerrar").addEventListener("click", () => ocultarTarjeta());
-    document.getElementById("al-tarjeta-btn").addEventListener("click", () => abrirBannerDeNuevo());
+    document.getElementById("al-tarjeta-btn").addEventListener("click", () => ());
 
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
@@ -762,7 +762,8 @@ export function mostrarAlertaLibre() {
 
         const cola = document.getElementById("al-cola-indicador");
         if (cola) cola.style.display = "none";
-
+        // Reusar abrirOverlayLibre para el contenido del overlay
+        abrirOverlayLibre();
         mostrarBarraTarjetaLibre();
 
         setTimeout(() => document.getElementById("al-btn-cerrar")?.focus(), 1000);
@@ -784,10 +785,12 @@ function verMapaAlerta() {
 }
 
 function abrirBannerDeNuevo() {
+    // Caso 1: hay un banner en curso → si el overlay está oculto, reabrirlo
     if (estado.bannerActual) {
         const overlay = document.getElementById("al-overlay");
         if (overlay && !overlay.classList.contains("al-visible")) {
             overlay.classList.add("al-visible");
+            overlay.classList.remove("al-libre");
             const panel = document.getElementById("al-panel");
             if (panel) {
                 panel.classList.remove("al-sirena-activa");
@@ -795,14 +798,86 @@ function abrirBannerDeNuevo() {
                 panel.classList.add("al-sirena-activa");
             }
         }
-    } else if (estado.colaBanners.length > 0) {
+        return;
+    }
+
+    // Caso 2: hay banners en cola → mostrar el siguiente
+    if (estado.colaBanners.length > 0) {
         mostrarSiguienteBanner();
-    } else if (estado.zonasActivas.size > 0) {
+        return;
+    }
+
+    // Caso 3: hay zonas activas pero sin banner en curso
+    // (por ejemplo, el usuario cerró todos los banners) → re-encolar
+    if (estado.zonasActivas.size > 0) {
         estado.colaBanners = Array.from(estado.zonasActivas.keys());
+
+        // Ordenar por criticidad
+        estado.colaBanners.sort((a, b) => {
+            const za = estado.zonasActivas.get(a);
+            const zb = estado.zonasActivas.get(b);
+            if (!za || !zb) return 0;
+            return NIVELES_ALERTA[zb.nivelKey].orden - NIVELES_ALERTA[za.nivelKey].orden;
+        });
+
         mostrarSiguienteBanner();
+        return;
+    }
+
+    // Caso 4: NO hay zonas activas → estado "Libre de alertas"
+    // Reabrir el overlay verde.
+    abrirOverlayLibre();
+}
+//============================================
+//función auxiliar abrirOverlayLibre()
+// ----------------------------------------------------------
+// Reabrir el overlay en estado "Libre de alertas"
+// ----------------------------------------------------------
+function abrirOverlayLibre() {
+    try {
+        asegurarEstructuraDOM();
+
+        const nivel = NIVELES_ALERTA.vigilancia;
+
+        // Aplicar variables CSS
+        const vars = [
+            ["--al-color", nivel.color],
+            ["--al-color-dark", nivel.colorDark],
+            ["--al-glow", nivel.glow]
+        ];
+        const aplicarVars = (el) => {
+            if (!el) return;
+            vars.forEach(([k, v]) => el.style.setProperty(k, v));
+        };
+        aplicarVars(document.getElementById("al-overlay"));
+        aplicarVars(document.getElementById("al-panel"));
+
+        // Contenido del overlay
+        document.getElementById("al-icono-big").textContent = "✅";
+        document.getElementById("al-nivel-badge").textContent = "VIGILANCIA";
+        document.getElementById("al-nivel-badge").style.background = nivel.color;
+        document.getElementById("al-titulo-texto").textContent = "🟢 LIBRE DE ALERTAS";
+        document.getElementById("al-mensaje-texto").textContent =
+            "No se han emitido alertas meteorológicas. El sistema se encuentra en vigilancia.";
+        document.getElementById("al-recomendacion-texto").textContent =
+            "Manténgase informado sobre el desarrollo del clima.";
+
+        // Ocultar contador
+        const wrap = document.getElementById("al-contador-wrap");
+        if (wrap) wrap.style.display = "none";
+
+        // Mostrar overlay en modo libre
+        const panel = document.getElementById("al-panel");
+        panel.classList.remove("al-resplandor-activo", "al-sirena-activa");
+        void panel.offsetWidth;
+
+        const overlay = document.getElementById("al-overlay");
+        overlay.classList.add("al-visible", "al-libre");
+
+    } catch (e) {
+        console.error("alertas.js: error al reabrir overlay libre", e);
     }
 }
-
 // ==========================================================
 // MODAL DE MEDIDAS DE SEGURIDAD
 // ==========================================================
