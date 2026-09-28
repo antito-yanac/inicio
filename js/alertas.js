@@ -114,6 +114,7 @@ const SVG_RAYO = `
 // ----------------------------------------------------------
 // ESTADO INTERNO — Múltiples zonas activas
 // ----------------------------------------------------------
+let libreYaCerradoPorUsuario = false;
 const estado = {
     zonasActivas: new Map(),
     colaBanners: [],
@@ -248,6 +249,7 @@ async function obtenerModuloMapa() {
 // ==========================================================
 export async function mostrarAlertaCompleta(datos = {}) {
     try {
+        libreYaCerradoPorUsuario = false;
         asegurarEstructuraDOM();
 
         const nivelKey = NIVELES_ALERTA[datos.nivel] ? datos.nivel : "roja";
@@ -482,6 +484,7 @@ function cerrarBannerActual() {
         // Estado "Libre de alertas": solo cerrar, sin reabrir.
         // La barra y la tarjeta verde ya están visibles de forma
         // persistente; no hace falta reabrir el overlay.
+        libreYaCerradoPorUsuario = true;
         mostrarBarraTarjetaLibre();
     }
 }
@@ -703,6 +706,11 @@ export function mostrarBarraTarjetaLibre() {
 // ==========================================================
 export function mostrarAlertaLibre() {
     try {
+        if (libreYaCerradoPorUsuario) {
+            asegurarEstructuraDOM();
+            mostrarBarraTarjetaLibre();
+            return;
+        }
         asegurarEstructuraDOM();
         detenerContador();
         detenerSonidoAlerta();
