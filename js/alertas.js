@@ -1,7 +1,7 @@
 // js/alertas.js
 //
 // ============================================================
-// Sistema de Alerta Meteorológica — v3
+// Sistema de Alerta Meteorológica — v3.1
 // ------------------------------------------------------------
 // - Soporta MÚLTIPLES zonas activas simultáneamente.
 // - Cola FIFO de banners (uno por zona, secuencial).
@@ -115,15 +115,15 @@ const SVG_RAYO = `
 // ESTADO INTERNO — Múltiples zonas activas
 // ----------------------------------------------------------
 const estado = {
-    zonasActivas: new Map(),      // distrito -> { nivel, nivelKey, inicio, fin, timestampInicio, duracionMin, titulo, mensaje, sectorOriginal }
-    colaBanners: [],              // array de distritos pendientes de mostrar
-    bannerActual: null,           // distrito del banner actualmente abierto
-    intervalContador: null,       // interval del contador del banner actual
-    intervalTimestamp: null       // interval del "hace X min"
+    zonasActivas: new Map(),
+    colaBanners: [],
+    bannerActual: null,
+    intervalContador: null,
+    intervalTimestamp: null
 };
 
 // ----------------------------------------------------------
-// DURACIÓN DEL TIMER DE ALERTA (default, si no viene en datos)
+// DURACIÓN DEL TIMER DE ALERTA (default)
 // ----------------------------------------------------------
 const DURACION_TIMER_MINUTOS = 15;
 
@@ -205,7 +205,6 @@ function asegurarEstructuraDOM() {
         document.body.appendChild(cont.firstChild);
     }
 
-    // Conectar eventos
     document.getElementById("al-btn-cerrar").addEventListener("click", () => cerrarBannerActual());
     document.getElementById("al-btn-mapa").addEventListener("click", () => verMapaAlerta());
     document.getElementById("al-btn-seguridad").addEventListener("click", () => mostrarModalSeguridad());
@@ -247,20 +246,6 @@ async function obtenerModuloMapa() {
 // ==========================================================
 // API PÚBLICA: mostrarAlertaCompleta(datos)
 // ==========================================================
-/**
- * Añade o actualiza una zona en alerta. Si ya estaba activa,
- * actualiza su nivel/tiempos. Si es nueva, la añade y la pone
- * en la cola de banners.
- *
- * datos = {
- *   nivel: "amarilla" | "naranja" | "roja",
- *   distrito: "Zona 1 - Campamentos",
- *   lat, lng,
- *   duracionMin, timestampInicio,
- *   sectorOriginal, inicio, fin,
- *   titulo, mensaje
- * }
- */
 export async function mostrarAlertaCompleta(datos = {}) {
     try {
         asegurarEstructuraDOM();
@@ -276,7 +261,6 @@ export async function mostrarAlertaCompleta(datos = {}) {
             ? datos.timestampInicio
             : Date.now();
 
-        // Registrar / actualizar la zona
         const yaExistia = estado.zonasActivas.has(distrito);
         estado.zonasActivas.set(distrito, {
             nivel: nivelKey,
@@ -313,9 +297,8 @@ export async function mostrarAlertaCompleta(datos = {}) {
         // Añadir a la cola de banners si es nueva
         if (!yaExistia) {
             estado.colaBanners.push(distrito);
+
             // Ordenar la cola por criticidad: ROJA > NARANJA > AMARILLA.
-            // Así, si llegan 4 alertas a la vez, el usuario ve primero
-            // la más crítica.
             estado.colaBanners.sort((a, b) => {
                 const za = estado.zonasActivas.get(a);
                 const zb = estado.zonasActivas.get(b);
@@ -328,7 +311,6 @@ export async function mostrarAlertaCompleta(datos = {}) {
         if (estado.bannerActual === null) {
             mostrarSiguienteBanner();
         } else {
-            // Ya hay banner abierto: actualizar indicador de cola
             actualizarIndicadorCola();
         }
 
@@ -345,26 +327,13 @@ export async function mostrarAlertaCompleta(datos = {}) {
     }
 }
 
-// Typo-fix: la función se llama actualizarBarraYTarjetaAgregadas
-function actualizarBarraYTarjetaAgregadas() {
-    actualizarBarraYTarjetaAgregadas();
-}
-
 // ==========================================================
 // API PÚBLICA: quitarAlerta(distrito)
 // ==========================================================
-/**
- * Quita una zona específica del estado de alertas.
- * - Quita el polígono del mapa.
- * - Quita el banner de la cola si estaba pendiente.
- * - Si era el banner actual, pasa al siguiente.
- * - Si no quedan zonas activas, vuelve a "Libre de alertas".
- */
 export async function quitarAlerta(distrito) {
     try {
         if (!distrito) return false;
 
-        // Buscar la zona por nombre exacto o parcial
         let distritoReal = null;
         for (const key of estado.zonasActivas.keys()) {
             if (key === distrito || key.includes(distrito) || distrito.includes(key)) {
@@ -395,7 +364,6 @@ export async function quitarAlerta(distrito) {
             } else if (estado.zonasActivas.size === 0) {
                 mostrarAlertaLibre();
             } else {
-                // Quedan zonas activas pero ninguna en cola
                 cerrarBanner();
                 actualizarBarraYTarjetaAgregadas();
             }
@@ -432,7 +400,6 @@ function mostrarSiguienteBanner() {
     const distrito = estado.colaBanners.shift();
     const zona = estado.zonasActivas.get(distrito);
     if (!zona) {
-        // La zona ya no está activa, pasar al siguiente
         mostrarSiguienteBanner();
         return;
     }
@@ -460,7 +427,6 @@ function actualizarIndicadorCola() {
 function pintarBannerDeZona(zona) {
     const nivel = NIVELES_ALERTA[zona.nivelKey];
 
-    // Aplicar variables CSS
     const vars = [
         ["--al-color", nivel.color],
         ["--al-color-dark", nivel.colorDark],
@@ -474,19 +440,16 @@ function pintarBannerDeZona(zona) {
     aplicarVars(document.getElementById("al-panel"));
     aplicarVars(document.getElementById("al-modal-seguridad"));
 
-    // Contenido del banner
     document.getElementById("al-icono-big").textContent = nivel.iconoBig;
     document.getElementById("al-nivel-badge").textContent = nivel.nombre;
     document.getElementById("al-titulo-texto").textContent = zona.titulo;
     document.getElementById("al-mensaje-texto").textContent = zona.mensaje;
     document.getElementById("al-recomendacion-texto").textContent = nivel.recomendacion;
 
-    // Reiniciar animaciones
     const panel = document.getElementById("al-panel");
     panel.classList.remove("al-resplandor-activo", "al-sirena-activa");
     void panel.offsetWidth;
 
-    // Mostrar overlay
     const overlay = document.getElementById("al-overlay");
     overlay.classList.remove("al-libre");
     overlay.classList.add("al-visible");
@@ -494,11 +457,8 @@ function pintarBannerDeZona(zona) {
 
     activarFlashFondo();
 
-    // Contador de ESTA zona
     const duracionMs = zona.duracionMin * 60 * 1000;
     iniciarContadorSincronizado(zona.timestampInicio, duracionMs, zona.distrito);
-
-    // Actualizar timestamp de la barra
     actualizarTimestampBarra(zona.timestampInicio);
 
     setTimeout(() => document.getElementById("al-btn-cerrar")?.focus(), 800);
@@ -510,7 +470,6 @@ function cerrarBannerActual() {
     detenerContador();
     detenerSonidoAlerta();
 
-    // Si quedan más banners en cola, mostrar el siguiente
     if (estado.colaBanners.length > 0) {
         setTimeout(() => mostrarSiguienteBanner(), 400);
     } else if (estado.zonasActivas.size === 0) {
@@ -537,11 +496,9 @@ function actualizarBarraYTarjetaAgregadas() {
     const zonas = Array.from(estado.zonasActivas.values());
 
     if (zonas.length === 0) {
-        // No hay zonas → dejar que mostrarAlertaLibre() se encargue
         return;
     }
 
-    // Determinar el nivel MÁS ALTO para el color de la barra
     let nivelMax = NIVELES_ALERTA.vigilancia;
     for (const z of zonas) {
         const n = NIVELES_ALERTA[z.nivelKey];
@@ -563,7 +520,6 @@ function actualizarBarraYTarjetaAgregadas() {
     barra.classList.remove("al-modo-libre");
     tarjeta.classList.remove("al-modo-libre");
 
-    // ---- BARRA SUPERIOR AGREGADA ----
     document.getElementById("al-barra-icono").textContent = nivelMax.iconoBig;
 
     if (zonas.length === 1) {
@@ -587,7 +543,6 @@ function actualizarBarraYTarjetaAgregadas() {
     }
     barra.classList.add("al-visible");
 
-    // ---- TARJETA FLOTANTE AGREGADA ----
     document.getElementById("al-tarjeta-icono").textContent = nivelMax.iconoBig;
 
     if (zonas.length === 1) {
@@ -648,7 +603,6 @@ function iniciarContadorSincronizado(timestampInicio, duracionMs, distrito) {
             el.classList.remove("al-critico");
             detenerContador();
             detenerSonidoAlerta();
-            // Esta zona expiró: quitarla
             quitarAlerta(distrito);
             return;
         }
@@ -746,14 +700,12 @@ export function mostrarAlertaLibre() {
         detenerContador();
         detenerSonidoAlerta();
 
-        // Limpiar TODOS los polígonos del mapa
         obtenerModuloMapa().then(mod => {
             if (mod && typeof mod.limpiarPoligonosZona === "function") {
                 mod.limpiarPoligonosZona();
             }
         }).catch(() => {});
 
-        // Reset estado
         estado.zonasActivas.clear();
         estado.colaBanners = [];
         estado.bannerActual = null;
@@ -793,7 +745,6 @@ export function mostrarAlertaLibre() {
         const overlay = document.getElementById("al-overlay");
         overlay.classList.add("al-visible", "al-libre");
 
-        // Ocultar indicador de cola
         const cola = document.getElementById("al-cola-indicador");
         if (cola) cola.style.display = "none";
 
@@ -818,7 +769,6 @@ function verMapaAlerta() {
 }
 
 function abrirBannerDeNuevo() {
-    // Si hay banner actual, mostrarlo
     if (estado.bannerActual) {
         const overlay = document.getElementById("al-overlay");
         if (overlay && !overlay.classList.contains("al-visible")) {
@@ -833,7 +783,6 @@ function abrirBannerDeNuevo() {
     } else if (estado.colaBanners.length > 0) {
         mostrarSiguienteBanner();
     } else if (estado.zonasActivas.size > 0) {
-        // Re-encolar todas las zonas activas para mostrar sus banners
         estado.colaBanners = Array.from(estado.zonasActivas.keys());
         mostrarSiguienteBanner();
     }
@@ -844,7 +793,6 @@ function abrirBannerDeNuevo() {
 // ==========================================================
 function mostrarModalSeguridad() {
     try {
-        // Nivel: el del banner actual si hay, o el más alto de zonas activas
         let nivelKey = "roja";
         if (estado.bannerActual) {
             const z = estado.zonasActivas.get(estado.bannerActual);
@@ -855,8 +803,7 @@ function mostrarModalSeguridad() {
                 const n = NIVELES_ALERTA[z.nivelKey];
                 if (n.orden > max.orden) max = n;
             }
-            nivelKey = max === NIVELES_ALERTA.vigilancia ? "roja" :
-                Object.keys(NIVELES_ALERTA).find(k => NIVELES_ALERTA[k] === max) || "roja";
+            nivelKey = Object.keys(NIVELES_ALERTA).find(k => NIVELES_ALERTA[k] === max) || "roja";
         }
         const nivel = NIVELES_ALERTA[nivelKey];
 
@@ -915,7 +862,6 @@ function activarFlashFondo() {
 function ocultarBarraSuperior() {
     const barra = document.getElementById("al-barra-superior");
     if (barra?.classList.contains("al-modo-libre")) return;
-    // Si hay zonas activas, la barra se queda visible (no se puede ocultar)
     if (estado.zonasActivas.size > 0) return;
     barra?.classList.remove("al-visible");
     if (estado.intervalTimestamp) {
