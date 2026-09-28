@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔔 Panel de Administración — Mensajes Antamina</title>
+<link rel="stylesheet" href="notifications.css">
+<link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="css/alerts.css">
+</head>
+<body>
+
+<!-- ============================================
+     Pantalla de inicio de sesión (login)
+     ============================================ -->
+<div class="admin-container" id="login-container">
+
+    <div class="admin-header">
+        <h1><span class="icon">🔒</span> Iniciar sesión</h1>
+        <p>Acceso solo para administradores</p>
+    </div>
+
+    <form id="form-login" autocomplete="off">
+
+        <div class="form-group">
+            <label for="login-email">👤 Correo</label>
+            <input
+                type="email"
+                id="login-email"
+                name="email"
+                placeholder="tu-correo@ejemplo.com"
+                autocomplete="username"
+                required>
+        </div>
+
+        <div class="form-group">
+            <label for="login-password">🔑 Contraseña</label>
+            <input
+                type="password"
+                id="login-password"
+                name="password"
+                placeholder="••••••••"
+                autocomplete="current-password"
+                required>
+        </div>
+
+        <div class="button-group">
+            <button type="submit" class="btn btn-enviar" id="btn-login">
+                🔓 Ingresar
+            </button>
+        </div>
+
+    </form>
+
+    <div class="status-bar" id="login-status"></div>
+
+</div>
+
+<!-- ============================================
+     Panel de mensajes (solo visible tras login)
+     ============================================ -->
+<div class="admin-container" id="panel-container" style="display:none;">
+
+    <!-- Encabezado -->
+    <div class="admin-header">
+        <h1><span class="icon">🔔</span> Panel de Mensajes</h1>
+        <p>Envía notificaciones push a los dispositivos registrados</p>
+        <button type="button" class="btn btn-cancelar" id="btn-logout" style="margin-top:12px;">
+            🚪 Cerrar sesión
+        </button>
+    </div>
+
+    <!-- Campos del formulario -->
+    <form id="form-mensaje" autocomplete="off">
+
+        <!-- Título del mensaje -->
+        <div class="form-group">
+            <label for="titulo">📋 Título</label>
+            <input
+                type="text"
+                id="titulo"
+                name="titulo"
+                placeholder="Escribe el título del mensaje..."
+                maxlength="100"
+                required>
+        </div>
+
+        <!-- Cuerpo del mensaje -->
+        <div class="form-group">
+            <label for="cuerpo">💬 Mensaje</label>
+            <textarea
+                id="cuerpo"
+                name="cuerpo"
+                placeholder="Escribe el contenido del mensaje..."
+                maxlength="500"
+                required></textarea>
+            <div class="char-counter" id="char-counter">0 / 500</div>
+        </div>
+
+        <!-- ============================================
+             MODO: Mensaje normal o Alerta meteorológica
+             ============================================ -->
+        <div class="form-group">
+            <label>📨 Tipo de mensaje</label>
+            <div class="tipo-selector" id="tipo-selector">
+                <label class="tipo-opcion">
+                    <input type="radio" name="tipo" value="normal" checked>
+                    <span>💬 Mensaje normal</span>
+                </label>
+                <label class="tipo-opcion">
+                    <input type="radio" name="tipo" value="alerta">
+                    <span>⚡ Alerta meteorológica</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Campos de ALERTA METEOROLÓGICA (ocultos por defecto) -->
+        <div id="campos-alerta" style="display:none;">
+
+            <!-- Nivel de alerta -->
+            <div class="form-group">
+                <label for="nivel">🎯 Nivel de alerta</label>
+                <select id="nivel" name="nivel">
+                    <option value="amarilla">🟡 Alerta amarilla</option>
+                    <option value="naranja" selected>🟠 Alerta naranja</option>
+                    <option value="roja">🔴 Alerta roja</option>
+                </select>
+                <div class="nivel-preview" id="nivel-preview"></div>
+            </div>
+
+            <!-- Zona (select con 3 opciones) -->
+            <div class="form-group">
+                <label for="distrito">📍 Zona afectada</label>
+                <select id="distrito" name="distrito">
+                    <option value="Zona 1 - Campamentos">Zona 1 - Campamentos</option>
+                    <option value="Zona 2 - Botadero Este">Zona 2 - Botadero Este</option>
+                    <option value="Zona 3 - Tucush">Zona 3 - Tucush</option>
+                    <option value="Zona 4 - Tajo">Zona 4 - Tajo</option>
+                </select>
+                <small style="opacity:0.7; font-size:12px;">Al seleccionar una zona, se pintará el polígono en el mapa con el color de la alerta.</small>
+            </div>
+
+            <!-- Coordenadas (opcional, para iluminar el mapa) -->
+            <div class="form-group">
+                <label for="coordenadas">🗺️ Coordenadas (opcional)</label>
+                <div style="display:flex; gap:8px;">
+                    <input
+                        type="number" step="any"
+                        id="lat" name="lat"
+                        placeholder="Latitud (Ej: -9.575)"
+                        style="flex:1;">
+                    <input
+                        type="number" step="any"
+                        id="lng" name="lng"
+                        placeholder="Longitud (Ej: -77.029)"
+                        style="flex:1;">
+                </div>
+                <small style="opacity:0.7; font-size:12px;">Si se indican, el mapa iluminará el punto con un rayo.</small>
+            </div>
+
+            <!-- Duración de la alerta (contador) -->
+            <div class="form-group">
+                <label for="duracion">⏰ Duración de la alerta (minutos)</label>
+                <input
+                    type="number"
+                    id="duracion" name="duracion"
+                    placeholder="15"
+                    min="1" max="1440"
+                    value="15">
+                <small style="opacity:0.7; font-size:12px;">Por defecto 15 minutos. Cualquier cambio del admin resetea el timer a 15 minutos.</small>
+            </div>
+
+        </div>
+        <!-- fin campos-alerta -->
+
+        <!-- Botones: Enviar (aceptar) y Cancelar -->
+        <div class="button-group">
+            <button type="submit" class="btn btn-enviar" id="btn-enviar">
+                ✅ Enviar
+            </button>
+            <button type="button" class="btn btn-cancelar" id="btn-cancelar">
+                ✖️ Cancelar
+            </button>
+        </div>
+
+    </form>
+
+    <!-- Barra de estado -->
+    <div class="status-bar" id="status-bar"></div>
+
+</div>
+<!-- fin panel-container -->
+
+<!-- ============================================
+     Modal de confirmación (Aceptar / Cancelar)
+     ============================================ -->
+<div class="modal-overlay" id="modal-confirm">
+    <div class="modal-box">
+        <div class="modal-icon">❓</div>
+        <h3 id="modal-titulo">¿Confirmar?</h3>
+        <p id="modal-mensaje">¿Estás seguro?</p>
+        <div class="modal-buttons">
+            <button type="button" class="btn btn-cancelar" id="modal-btn-cancelar">
+                ✖️ Cancelar
+            </button>
+            <button type="button" class="btn btn-enviar" id="modal-btn-aceptar">
+                ✅ Aceptar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>

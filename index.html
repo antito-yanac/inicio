@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<title>Antamina · Vigilancia</title>
+
+<link rel="stylesheet" href="style.css">
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<link rel="stylesheet" href="notifications.css">
+
+<link rel="stylesheet" href="css/alerts.css">
+
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- MAPA A PANTALLA COMPLETA -->
+    <main id="map-container">
+        <div id="map"></div>
+
+        <button
+            id="btn-ubicacion"
+            title="Mi ubicación"
+            aria-label="Mostrar mi ubicación">
+
+            <svg
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                xmlns="http://www.w3.org/2000/svg">
+
+                <path
+                    fill="#4285f4"
+                    d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/>
+            </svg>
+
+        </button>
+
+    </main>
+
+
+    <!-- CABECERA -->
+    <section class="top-ui">
+
+        <div class="left-ui">
+
+            <div class="brand">
+
+                <div class="brand-icon">
+                    ⚡
+                </div>
+
+                <div>
+                    <div class="brand-name">
+                        ANTAMINA
+                    </div>
+
+                    <div class="brand-subtitle">
+                        Mapa de lugares
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- BUSCADOR -->
+            <div class="search-box">
+
+                <span class="search-icon">
+                    ⌕
+                </span>
+
+                <input
+                    id="search"
+                    type="search"
+                    placeholder="Buscar lugar..."
+                    autocomplete="off">
+
+            </div>
+
+
+            <!-- RESULTADOS DEL BUSCADOR -->
+            <div id="results"></div>
+
+            <div id="stats">
+                Cargando lugares...
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- TARJETA INFERIOR -->
+    <section
+        class="info"
+        id="info-panel">
+
+        <div class="vigilance-kicker">
+            VIGILANCIA
+        </div>
+
+        <div
+            class="vigilance-meta"
+            id="info-content">
+
+            <div class="vigilance-line">
+
+                <span>🟢</span>
+
+                <span>
+                    <strong>Estado:</strong>
+                    Sin alertas meteorológicas
+                </span>
+
+            </div>
+
+            <div class="vigilance-line">
+
+                <span>📍</span>
+
+                <span>
+                    <strong>Sistema:</strong>
+                    En vigilancia
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <!-- SE CONSERVA PARA TU JS DE ALERTAS -->
+        <button
+            id="btn-test-alerta"
+            type="button"
+            class="hidden-alert-trigger">
+
+            Consultar alerta meteorológica
+
+        </button>
+
+    </section>
+
+
+    <footer class="footer">
+        Antamina · Información meteorológica · 2026
+    </footer>
+
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script type="module" src="js/app.js"></script>
+
+<!-- JSZip para abrir archivos .kmz -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<!-- togeojson para convertir KML a GeoJSON -->
+<script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
+
+</body>
+
+</html>
