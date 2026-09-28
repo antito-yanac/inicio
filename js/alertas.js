@@ -1,31 +1,21 @@
 // js/alertas.js
 //
 // ============================================================
-// Sistema de Alerta Meteorológica — Buscador Lugares Antamina
+// Sistema de Alerta Meteorológica — v3
 // ------------------------------------------------------------
-// Orquesta los 12 efectos visuales cuando llega una alerta desde
-// Firestore (js/mensajes.js). Diseñado para no romper la app si
-// algún efecto falla (cada uno está aislado en try/catch).
-//
-// 1.  Banner de alerta a pantalla completa
-// 2.  Flash de fondo
-// 3.  Barra superior permanente
-// 4.  Tarjeta flotante
-// 5.  Pulso radar alrededor del icono
-// 6.  Contador regresivo
-// 7.  Mapa iluminado (círculo rojo + rayo)
-// 8.  Efecto sirena (borde rojo↔naranja)
-// 9.  Niveles de alerta estandarizados
-// 10. Iconografía grande
-// 11. Animación del rayo SVG
-// 12. Botones de acción destacados
+// - Soporta MÚLTIPLES zonas activas simultáneamente.
+// - Cola FIFO de banners (uno por zona, secuencial).
+// - Barra superior y tarjeta flotante AGREGADAS (resumen).
+// - Maneja "alerta-resuelta" (quita una zona específica).
+// - Cuando todas las zonas vuelven a VERDE → "Libre de alertas".
+// - Cada zona tiene su propio contador sincronizado.
+// - Mapa: N polígonos (delegado a map.js v3).
 // ============================================================
 
-// Importar funciones de sonido para el loop de 30 segundos
 import { reproducirSonidoAlerta, detenerSonidoAlerta } from "./notifications.js";
 
 // ----------------------------------------------------------
-// Definición de niveles de alerta (característica #9)
+// Niveles de alerta
 // ----------------------------------------------------------
 export const NIVELES_ALERTA = {
     vigilancia: {
@@ -36,42 +26,46 @@ export const NIVELES_ALERTA = {
         icono: "🟢",
         iconoBig: "🌩️",
         descripcion: "Actividad eléctrica lejana.",
-        recomendacion: "Manténgase informado sobre el desarrollo del clima."
+        recomendacion: "Manténgase informado sobre el desarrollo del clima.",
+        orden: 0
     },
     amarilla: {
-    nombre: "Alerta amarilla",
-    color: "#f1c40f",
-    colorDark: "#c9a003",
-    glow: "rgba(241,196,15,0.6)",
-    icono: "🟡",
-    iconoBig: "⚡",
-    descripcion: "Posibles descargas eléctricas en la zona.",
-    recomendacion: "Manténgase atento a la evolución de la actividad eléctrica."
+        nombre: "Alerta amarilla",
+        color: "#f1c40f",
+        colorDark: "#c9a003",
+        glow: "rgba(241,196,15,0.6)",
+        icono: "🟡",
+        iconoBig: "⚡",
+        descripcion: "Posibles descargas eléctricas en la zona.",
+        recomendacion: "Manténgase atento a la evolución de la actividad eléctrica.",
+        orden: 1
     },
     naranja: {
-    nombre: "Alerta naranja",
-    color: "#e67e22",
-    colorDark: "#b9530f",
-    glow: "rgba(230,126,34,0.65)",
-    icono: "🟠",
-    iconoBig: "⚡",
-    descripcion: "Actividad eléctrica cercana.",
-    recomendacion: "Evite actividades al aire libre."
+        nombre: "Alerta naranja",
+        color: "#e67e22",
+        colorDark: "#b9530f",
+        glow: "rgba(230,126,34,0.65)",
+        icono: "🟠",
+        iconoBig: "⚡",
+        descripcion: "Actividad eléctrica cercana.",
+        recomendacion: "Evite actividades al aire libre.",
+        orden: 2
     },
     roja: {
-    nombre: "Alerta roja",
-    color: "#e74c3c",
-    colorDark: "#c0392b",
-    glow: "rgba(231,76,60,0.7)",
-    icono: "🔴",
-    iconoBig: "⚡",
-    descripcion: "Actividad eléctrica muy cercana.",
-    recomendacion: "Refúgiese inmediatamente."
+        nombre: "Alerta roja",
+        color: "#e74c3c",
+        colorDark: "#c0392b",
+        glow: "rgba(231,76,60,0.7)",
+        icono: "🔴",
+        iconoBig: "⚡",
+        descripcion: "Actividad eléctrica muy cercana.",
+        recomendacion: "Refúgiese inmediatamente.",
+        orden: 3
     }
 };
 
 // ----------------------------------------------------------
-// Medidas de seguridad según el nivel (para el botón #12)
+// Medidas de seguridad por nivel
 // ----------------------------------------------------------
 const MEDIDAS_SEGURIDAD = {
     vigilancia: [
@@ -79,20 +73,20 @@ const MEDIDAS_SEGURIDAD = {
         { icono: "📱", texto: "Mantenga su dispositivo <strong>cargado</strong> por si hay cortes." },
         { icono: "👀", texto: "Observe la evolución de las nubes en la zona." }
     ],
-    precaucion: [
+    amarilla: [
         { icono: "🏠", texto: "Identifique <strong>lugares seguros</strong> cercanos." },
         { icono: "🚫", texto: "Evite el uso de <strong>equipos eléctricos sensibles</strong>." },
         { icono: "⚡", texto: "Aléjese de <strong>estructuras metálicas</strong> elevadas." },
         { icono: "☂️", texto: "Tenga a mano <strong>paraguas e impermeables</strong>." }
     ],
-    alerta: [
+    naranja: [
         { icono: "🏃", texto: "<strong>Suspenda</strong> toda actividad al aire libre." },
         { icono: "🏠", texto: "Busque <strong>refugio en edificaciones</strong> cerradas." },
         { icono: "🌳", texto: "Aléjese de <strong>árboles solitarios</strong> y postes." },
         { icono: "💧", texto: "Evite <strong>contacto con agua</strong> (no se bañe ni lave)." },
         { icono: "🔌", texto: "<strong>Desconecte</strong> equipos electrónicos sensibles." }
     ],
-    emergencia: [
+    roja: [
         { icono: "🏛️", texto: "<strong>Refúgiese de inmediato</strong> en un lugar cerrado." },
         { icono: "🚫", texto: "No toque <strong>metales ni agua</strong>." },
         { icono: "🪑", texto: "Adopte posición de <strong>cuclillas</strong>, pies juntos." },
@@ -103,7 +97,7 @@ const MEDIDAS_SEGURIDAD = {
 };
 
 // ----------------------------------------------------------
-// SVG del rayo (característica #11)
+// SVG del rayo
 // ----------------------------------------------------------
 const SVG_RAYO = `
 <svg class="al-rayo-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -117,31 +111,24 @@ const SVG_RAYO = `
   <polygon points="58,5 30,52 48,52 38,95 72,42 52,42 62,5" fill="url(#alRayoGrad)" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
 </svg>`;
 
-const SVG_RAYO_MAPA = `
-<svg class="al-mapa-rayo-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <polygon points="58,5 30,52 48,52 38,95 72,42 52,42 62,5" fill="#ffeb3b" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
-</svg>`;
+// ----------------------------------------------------------
+// ESTADO INTERNO — Múltiples zonas activas
+// ----------------------------------------------------------
+const estado = {
+    zonasActivas: new Map(),      // distrito -> { nivel, nivelKey, inicio, fin, timestampInicio, duracionMin, titulo, mensaje, sectorOriginal }
+    colaBanners: [],              // array de distritos pendientes de mostrar
+    bannerActual: null,           // distrito del banner actualmente abierto
+    intervalContador: null,       // interval del contador del banner actual
+    intervalTimestamp: null       // interval del "hace X min"
+};
 
 // ----------------------------------------------------------
-// Estado interno
-// ----------------------------------------------------------
-let alertaActiva = false;
-let intervalContador = null;
-let intervalSirena = null;
-let intervalTimestamp = null;
-let intervalRayoMapa = null;
-let tiempoInicioAlerta = null;
-let capaMapaAlerta = null;   // capa Leaflet con rayo + núcleo + pulso
-let mapaRef = null;          // referencia al mapa Leaflet
-let idAlertaMapa = 0;        // identifica la alerta de mapa vigente
-
-// ----------------------------------------------------------
-// DURACIÓN DEL TIMER DE ALERTA (15 minutos por defecto)
+// DURACIÓN DEL TIMER DE ALERTA (default, si no viene en datos)
 // ----------------------------------------------------------
 const DURACION_TIMER_MINUTOS = 15;
 
 // ----------------------------------------------------------
-// Inyección del HTML base (contenedores) en el DOM
+// Inyección del HTML base
 // ----------------------------------------------------------
 function asegurarEstructuraDOM() {
     if (document.getElementById("al-overlay")) return;
@@ -172,6 +159,7 @@ function asegurarEstructuraDOM() {
                 <button class="al-btn al-btn-secundario" id="al-btn-seguridad">🛡️ Medidas de seguridad</button>
                 <button class="al-btn al-btn-cerrar" id="al-btn-cerrar">Entendido</button>
             </div>
+            <div class="al-cola-indicador" id="al-cola-indicador" style="display:none;"></div>
         </div>
     </div>
 
@@ -213,13 +201,12 @@ function asegurarEstructuraDOM() {
 
     const cont = document.createElement("div");
     cont.innerHTML = html;
-    // Mover los elementos al body (no envolverlos en un div extra)
     while (cont.firstChild) {
         document.body.appendChild(cont.firstChild);
     }
 
     // Conectar eventos
-    document.getElementById("al-btn-cerrar").addEventListener("click", () => cerrarAlerta());
+    document.getElementById("al-btn-cerrar").addEventListener("click", () => cerrarBannerActual());
     document.getElementById("al-btn-mapa").addEventListener("click", () => verMapaAlerta());
     document.getElementById("al-btn-seguridad").addEventListener("click", () => mostrarModalSeguridad());
     document.getElementById("al-modal-cerrar").addEventListener("click", () => cerrarModalSeguridad());
@@ -234,243 +221,405 @@ function asegurarEstructuraDOM() {
     document.getElementById("al-tarjeta-cerrar").addEventListener("click", () => ocultarTarjeta());
     document.getElementById("al-tarjeta-btn").addEventListener("click", () => abrirBannerDeNuevo());
 
-    // Cerrar con Escape
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             if (document.getElementById("al-modal-seguridad").classList.contains("al-visible")) {
                 cerrarModalSeguridad();
             } else if (document.getElementById("al-overlay").classList.contains("al-visible")) {
-                cerrarAlerta();
+                cerrarBannerActual();
             }
         }
     });
 }
 
 // ----------------------------------------------------------
-// IMPORTAR el módulo del mapa de forma dinámica (para no
-// crear dependencia circular). map.js expone iluminarDistrito.
+// Importar map.js dinámicamente
 // ----------------------------------------------------------
 async function obtenerModuloMapa() {
     try {
-        const mod = await import("./map.js");
-        return mod;
+        return await import("./map.js");
     } catch (e) {
         console.warn("alertas.js: no se pudo importar map.js", e);
         return null;
     }
 }
 
-// ----------------------------------------------------------
-// FUNCIÓN PRINCIPAL: mostrarAlertaCompleta(datos)
-// datos = {
-//   nivel: "vigilancia"|"amarilla"|"naranja"|"roja",
-//   titulo: string,
-//   mensaje: string,
-//   distrito: string,
-//   lat: number|null,
-//   lng: number|null,
-//   duracionMin: number|null
-// }
-// ----------------------------------------------------------
+// ==========================================================
+// API PÚBLICA: mostrarAlertaCompleta(datos)
+// ==========================================================
+/**
+ * Añade o actualiza una zona en alerta. Si ya estaba activa,
+ * actualiza su nivel/tiempos. Si es nueva, la añade y la pone
+ * en la cola de banners.
+ *
+ * datos = {
+ *   nivel: "amarilla" | "naranja" | "roja",
+ *   distrito: "Zona 1 - Campamentos",
+ *   lat, lng,
+ *   duracionMin, timestampInicio,
+ *   sectorOriginal, inicio, fin,
+ *   titulo, mensaje
+ * }
+ */
 export async function mostrarAlertaCompleta(datos = {}) {
     try {
         asegurarEstructuraDOM();
 
         const nivelKey = NIVELES_ALERTA[datos.nivel] ? datos.nivel : "roja";
-        const nivel = NIVELES_ALERTA[nivelKey];
+        const distrito = datos.distrito || `Zona ${estado.zonasActivas.size + 1}`;
 
-        // Detener cualquier alerta previa
-        detenerIntervalos();
-        limpiarMapaAlerta();
-
-        // Invalidar cualquier operación asíncrona de la alerta anterior
-        idAlertaMapa++;
-        const miIdAlerta = idAlertaMapa;
-
-        alertaActiva = true;
-
-        // Usar el mismo timestamp de Firestore que utiliza el contador.
-        tiempoInicioAlerta =
-            (typeof datos.timestampInicio === "number" && datos.timestampInicio > 0)
-                ? datos.timestampInicio
-                : Date.now();
-
-        // Aplicar variables CSS del nivel a los contenedores
-        const vars = [
-            ["--al-color", nivel.color],
-            ["--al-color-dark", nivel.colorDark],
-            ["--al-glow", nivel.glow]
-        ];
-        const aplicarVars = (el) => {
-            if (!el) return;
-            vars.forEach(([k, v]) => el.style.setProperty(k, v));
-        };
-        aplicarVars(document.getElementById("al-overlay"));
-        aplicarVars(document.getElementById("al-panel"));
-        aplicarVars(document.getElementById("al-barra-superior"));
-        aplicarVars(document.getElementById("al-tarjeta"));
-        aplicarVars(document.getElementById("al-modal-seguridad"));
-
-        // Quitar modo "libre" de barra y tarjeta (ahora son de alerta real)
-        document.getElementById("al-barra-superior")?.classList.remove("al-modo-libre");
-        document.getElementById("al-tarjeta")?.classList.remove("al-modo-libre");
-
-        // ----- 1. BANNER A PANTALLA COMPLETA -----
-        document.getElementById("al-icono-big").textContent = nivel.iconoBig;
-        document.getElementById("al-nivel-badge").textContent = nivel.nombre;
-        document.getElementById("al-titulo-texto").textContent = datos.titulo || "⚡ ALERTA DE TORMENTA ELÉCTRICA";
-        document.getElementById("al-mensaje-texto").textContent =
-            datos.mensaje || `Se detectó actividad eléctrica${datos.distrito ? " en " + datos.distrito : ""}.`;
-        document.getElementById("al-recomendacion-texto").textContent = nivel.recomendacion;
-
-        // Reiniciar animaciones del panel (quitar y re-añadir clases)
-        const panel = document.getElementById("al-panel");
-        panel.classList.remove("al-resplandor-activo", "al-sirena-activa");
-        void panel.offsetWidth; // forzar reflow
-
-        // Mostrar overlay (estado de alerta real: quitar clase "libre")
-        const overlay = document.getElementById("al-overlay");
-        overlay.classList.remove("al-libre");
-        overlay.classList.add("al-visible");
-        panel.classList.add("al-sirena-activa");
-
-        // ----- 2. FLASH DE FONDO (solo en entrada, no repetitivo) -----
-        activarFlashFondo();
-
-        // ----- 3. BARRA SUPERIOR PERMANENTE -----
-        document.getElementById("al-barra-icono").textContent = nivel.iconoBig;
-        document.getElementById("al-barra-nivel").textContent =
-            (nivel.nombre + " " + (nivelKey === "emergencia" ? "🔴" : nivelKey === "alerta" ? "🟠" : nivelKey === "precaucion" ? "🟡" : "🟢")).toUpperCase();
-        document.getElementById("al-barra-desc").textContent = datos.titulo || "Tormenta eléctrica";
-        document.getElementById("al-barra-tiempo").textContent = "Hace unos segundos";
-        document.getElementById("al-barra-superior").classList.add("al-visible");
-        iniciarTimestampBarra();
-
-        // ----- 4. TARJETA FLOTANTE -----
-        document.getElementById("al-tarjeta-icono").textContent = nivel.iconoBig;
-        document.getElementById("al-tarjeta-sub").textContent = ("ALERTA " + nivel.nombre).toUpperCase();
-        document.getElementById("al-tarjeta-titulo").textContent = datos.titulo || "Tormenta eléctrica";
-        const cuerpo = [];
-        if (datos.distrito) cuerpo.push(`<strong>📍 Distrito:</strong> ${datos.distrito}`);
-        // if (datos.intensidad) cuerpo.push(`<strong>📊 Intensidad:</strong> ${datos.intensidad}`);
-        cuerpo.push(`<strong>⚡ Nivel:</strong> ${nivel.nombre}`);
-        document.getElementById("al-tarjeta-cuerpo").innerHTML = cuerpo.join("<br>");
-        // Mostrar con un pequeño retardo para que entre después del banner
-        setTimeout(() => {
-            document.getElementById("al-tarjeta").classList.add("al-visible");
-        }, 700);
-
-        // ----- 6. CONTADOR REGRESIVO SINCRONIZADO -----
-        // El contador se sincroniza entre TODOS los navegadores usando
-        // el timestampInicio real del documento de Firestore que envió
-        // el admin. De este modo, todos los navegadores calculan el
-        // tiempo restante a partir del mismo instante y el contador
-        // llega a cero al mismo tiempo en todas partes.
-        //
-        // datos.timestampInicio = milisegundos (epoch) del momento en
-        //   que el admin emitió la alerta (guardado en Firestore).
-        // datos.duracionMin = duración total en minutos (15 por defecto).
         const duracionMin = (datos.duracionMin && datos.duracionMin > 0)
             ? datos.duracionMin
             : DURACION_TIMER_MINUTOS;
-        const duracionMs = duracionMin * 60 * 1000;
+
         const tsInicio = (typeof datos.timestampInicio === "number" && datos.timestampInicio > 0)
             ? datos.timestampInicio
-            : Date.now(); // fallback: si no hay timestamp, usar ahora
-        iniciarContadorSincronizado(tsInicio, duracionMs);
+            : Date.now();
 
-        // ----- 7. MAPA ILUMINADO -----
-        // Solo se crea UNA capa de alerta: rayo + núcleo + pulso.
-        // Esto evita duplicar los efectos cuando también existe distrito.
-        if (datos.lat != null && datos.lng != null) {
-            iluminarMapa(datos.lat, datos.lng, nivelKey, miIdAlerta);
-        }
+        // Registrar / actualizar la zona
+        const yaExistia = estado.zonasActivas.has(distrito);
+        estado.zonasActivas.set(distrito, {
+            nivel: nivelKey,
+            nivelKey,
+            distrito,
+            lat: datos.lat ?? null,
+            lng: datos.lng ?? null,
+            duracionMin,
+            timestampInicio: tsInicio,
+            sectorOriginal: datos.sectorOriginal || null,
+            inicio: datos.inicio || null,
+            fin: datos.fin || null,
+            titulo: datos.titulo || `⚡ ALERTA ${nivelKey.toUpperCase()} — ${distrito}`,
+            mensaje: datos.mensaje || `Actividad eléctrica detectada en ${distrito}.`
+        });
 
-        // ----- 7b. PINTAR POLÍGONO DE ZONA -----
-        // Si se especifica un distrito/zona, pintar el polígono con el color de la alerta
+        // Pintar polígono de esa zona en el mapa (sin borrar las otras)
         if (datos.distrito) {
-            pintarZonaEnMapa(datos.distrito, nivel.color, miIdAlerta);
+            const mod = await obtenerModuloMapa();
+            if (mod && typeof mod.pintarPoligonoZona === "function") {
+                const nivel = NIVELES_ALERTA[nivelKey];
+                await mod.pintarPoligonoZona(datos.distrito, nivel.color);
+            }
         }
 
-        // ----- SONIDO EN LOOP (30 segundos) -----
-        // Las alertas amarilla, naranja y roja reproducen sonido en loop por 30 segundos
-        if (nivelKey !== "vigilancia") {
-            try {
-                reproducirSonidoAlerta(30);
-            } catch (e) { /* no crítico */ }
+        // Rayo sobre el punto (solo si es la primera vez que se activa esa zona)
+        if (!yaExistia && datos.lat != null && datos.lng != null) {
+            const mod = await obtenerModuloMapa();
+            if (mod && typeof mod.iluminarDistrito === "function") {
+                await mod.iluminarDistrito(datos.lat, datos.lng, nivelKey);
+            }
         }
 
-        // Enfocar el botón de cerrar para accesibilidad
-        setTimeout(() => document.getElementById("al-btn-cerrar").focus(), 1000);
+        // Añadir a la cola de banners si es nueva
+        if (!yaExistia) {
+            estado.colaBanners.push(distrito);
+            // Ordenar la cola por criticidad: ROJA > NARANJA > AMARILLA.
+            // Así, si llegan 4 alertas a la vez, el usuario ve primero
+            // la más crítica.
+            estado.colaBanners.sort((a, b) => {
+                const za = estado.zonasActivas.get(a);
+                const zb = estado.zonasActivas.get(b);
+                if (!za || !zb) return 0;
+                return NIVELES_ALERTA[zb.nivelKey].orden - NIVELES_ALERTA[za.nivelKey].orden;
+            });
+        }
+
+        // Si no hay banner abierto, mostrar el siguiente
+        if (estado.bannerActual === null) {
+            mostrarSiguienteBanner();
+        } else {
+            // Ya hay banner abierto: actualizar indicador de cola
+            actualizarIndicadorCola();
+        }
+
+        // Actualizar la barra superior y la tarjeta flotante agregadas
+        actualizarBarraY TarjetaAgregadas();
+
+        // Reproducir sonido (solo si es alerta nueva y no vigilancia)
+        if (!yaExistia && nivelKey !== "vigilancia") {
+            try { reproducirSonidoAlerta(30); } catch (e) {}
+        }
 
     } catch (e) {
         console.error("alertas.js: error al mostrar alerta", e);
     }
 }
 
-// ----------------------------------------------------------
-// 2. FLASH DE FONDO
-// ----------------------------------------------------------
-function activarFlashFondo() {
+// Typo-fix: la función se llama actualizarBarraYTarjetaAgregadas
+//function actualizarBarraY TarjetaAgregadas() {
+//    actualizarBarraYTarjetaAgregadas();
+//}
+
+// ==========================================================
+// API PÚBLICA: quitarAlerta(distrito)
+// ==========================================================
+/**
+ * Quita una zona específica del estado de alertas.
+ * - Quita el polígono del mapa.
+ * - Quita el banner de la cola si estaba pendiente.
+ * - Si era el banner actual, pasa al siguiente.
+ * - Si no quedan zonas activas, vuelve a "Libre de alertas".
+ */
+export async function quitarAlerta(distrito) {
     try {
-        const body = document.body;
-        body.classList.remove("al-flash-activo");
-        void body.offsetWidth;
-        body.classList.add("al-flash-activo");
-        setTimeout(() => body.classList.remove("al-flash-activo"), 4600);
-    } catch (e) { /* no crítico */ }
+        if (!distrito) return false;
+
+        // Buscar la zona por nombre exacto o parcial
+        let distritoReal = null;
+        for (const key of estado.zonasActivas.keys()) {
+            if (key === distrito || key.includes(distrito) || distrito.includes(key)) {
+                distritoReal = key;
+                break;
+            }
+        }
+
+        if (!distritoReal) return false;
+
+        // 1) Quitar polígono del mapa
+        const mod = await obtenerModuloMapa();
+        if (mod && typeof mod.quitarPoligonoZona === "function") {
+            mod.quitarPoligonoZona(distritoReal);
+        }
+
+        // 2) Quitar del estado
+        estado.zonasActivas.delete(distritoReal);
+
+        // 3) Quitar de la cola si estaba pendiente
+        estado.colaBanners = estado.colaBanners.filter(d => d !== distritoReal);
+
+        // 4) Si era el banner actual, cerrar y pasar al siguiente (o a libre)
+        if (estado.bannerActual === distritoReal) {
+            estado.bannerActual = null;
+            if (estado.colaBanners.length > 0) {
+                mostrarSiguienteBanner();
+            } else if (estado.zonasActivas.size === 0) {
+                mostrarAlertaLibre();
+            } else {
+                // Quedan zonas activas pero ninguna en cola
+                cerrarBanner();
+                actualizarBarraYTarjetaAgregadas();
+            }
+        } else {
+            actualizarIndicadorCola();
+        }
+
+        // 5) Actualizar barra/tarjeta
+        if (estado.zonasActivas.size > 0) {
+            actualizarBarraYTarjetaAgregadas();
+        }
+
+        return true;
+
+    } catch (e) {
+        console.error("alertas.js: error al quitar alerta", e);
+        return false;
+    }
 }
 
-// ----------------------------------------------------------
-// 6. CONTADOR REGRESIVO
-// ----------------------------------------------------------
-function iniciarContador(segundosTotales) {
-    let restante = segundosTotales;
-    const el = document.getElementById("al-contador");
-    const wrap = document.getElementById("al-contador-wrap");
-    if (!el || !wrap) return;
-    wrap.style.display = "block";
+// ==========================================================
+// COLA DE BANNERS (UI-A)
+// ==========================================================
+function mostrarSiguienteBanner() {
+    if (estado.colaBanners.length === 0) {
+        estado.bannerActual = null;
+        cerrarBanner();
+        if (estado.zonasActivas.size === 0) {
+            mostrarAlertaLibre();
+        }
+        return;
+    }
 
-    const formatear = (s) => {
-        const h = Math.floor(s / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        const seg = s % 60;
-        return [h, m, seg].map(v => String(v).padStart(2, "0")).join(":");
+    const distrito = estado.colaBanners.shift();
+    const zona = estado.zonasActivas.get(distrito);
+    if (!zona) {
+        // La zona ya no está activa, pasar al siguiente
+        mostrarSiguienteBanner();
+        return;
+    }
+
+    estado.bannerActual = distrito;
+    pintarBannerDeZona(zona);
+    actualizarIndicadorCola();
+}
+
+function actualizarIndicadorCola() {
+    const el = document.getElementById("al-cola-indicador");
+    if (!el) return;
+
+    const pendientes = estado.colaBanners.length;
+    if (pendientes === 0) {
+        el.style.display = "none";
+        el.textContent = "";
+        return;
+    }
+
+    el.style.display = "block";
+    el.textContent = `+ ${pendientes} zona${pendientes > 1 ? "s" : ""} en alerta`;
+}
+
+function pintarBannerDeZona(zona) {
+    const nivel = NIVELES_ALERTA[zona.nivelKey];
+
+    // Aplicar variables CSS
+    const vars = [
+        ["--al-color", nivel.color],
+        ["--al-color-dark", nivel.colorDark],
+        ["--al-glow", nivel.glow]
+    ];
+    const aplicarVars = (el) => {
+        if (!el) return;
+        vars.forEach(([k, v]) => el.style.setProperty(k, v));
     };
+    aplicarVars(document.getElementById("al-overlay"));
+    aplicarVars(document.getElementById("al-panel"));
+    aplicarVars(document.getElementById("al-modal-seguridad"));
 
-    el.textContent = formatear(restante);
-    el.classList.remove("al-critico");
+    // Contenido del banner
+    document.getElementById("al-icono-big").textContent = nivel.iconoBig;
+    document.getElementById("al-nivel-badge").textContent = nivel.nombre;
+    document.getElementById("al-titulo-texto").textContent = zona.titulo;
+    document.getElementById("al-mensaje-texto").textContent = zona.mensaje;
+    document.getElementById("al-recomendacion-texto").textContent = nivel.recomendacion;
 
-    if (intervalContador) clearInterval(intervalContador);
-    intervalContador = setInterval(() => {
-        restante--;
-        if (restante <= 0) {
-            el.textContent = "00:00:00";
-            el.classList.remove("al-critico");
-            clearInterval(intervalContador);
-            intervalContador = null;
-            return;
-        }
-        el.textContent = formatear(restante);
-        // Últimos 60 segundos: parpadeo crítico
-        if (restante <= 60) {
-            el.classList.add("al-critico");
-        }
-    }, 1000);
+    // Reiniciar animaciones
+    const panel = document.getElementById("al-panel");
+    panel.classList.remove("al-resplandor-activo", "al-sirena-activa");
+    void panel.offsetWidth;
+
+    // Mostrar overlay
+    const overlay = document.getElementById("al-overlay");
+    overlay.classList.remove("al-libre");
+    overlay.classList.add("al-visible");
+    panel.classList.add("al-sirena-activa");
+
+    activarFlashFondo();
+
+    // Contador de ESTA zona
+    const duracionMs = zona.duracionMin * 60 * 1000;
+    iniciarContadorSincronizado(zona.timestampInicio, duracionMs, zona.distrito);
+
+    // Actualizar timestamp de la barra
+    actualizarTimestampBarra(zona.timestampInicio);
+
+    setTimeout(() => document.getElementById("al-btn-cerrar")?.focus(), 800);
 }
 
-// ----------------------------------------------------------
-// 6b. CONTADOR REGRESIVO SINCRONIZADO ENTRE NAVEGADORES
-// ----------------------------------------------------------
-// A diferencia de iniciarContador(), este usa un timestamp de
-// inicio REAL (el momento en que el admin emitió la alerta) en
-// lugar de Date.now() local. Así, todos los navegadores calculan
-// el tiempo restante a partir del mismo instante y el contador
-// llega a cero al mismo tiempo en todas partes.
-//
-// @param {number} timestampInicio - epoch ms del inicio de la alerta
-// @param {number} duracionMs - duración total en milisegundos
-function iniciarContadorSincronizado(timestampInicio, duracionMs) {
+function cerrarBannerActual() {
+    cerrarBanner();
+    estado.bannerActual = null;
+    detenerContador();
+    detenerSonidoAlerta();
+
+    // Si quedan más banners en cola, mostrar el siguiente
+    if (estado.colaBanners.length > 0) {
+        setTimeout(() => mostrarSiguienteBanner(), 400);
+    } else if (estado.zonasActivas.size === 0) {
+        mostrarAlertaLibre();
+    } else {
+        actualizarBarraYTarjetaAgregadas();
+    }
+}
+
+function cerrarBanner() {
+    const overlay = document.getElementById("al-overlay");
+    overlay?.classList.remove("al-visible");
+    overlay?.classList.remove("al-libre");
+}
+
+// ==========================================================
+// BARRA SUPERIOR Y TARJETA AGREGADAS
+// ==========================================================
+function actualizarBarraYTarjetaAgregadas() {
+    const barra = document.getElementById("al-barra-superior");
+    const tarjeta = document.getElementById("al-tarjeta");
+    if (!barra || !tarjeta) return;
+
+    const zonas = Array.from(estado.zonasActivas.values());
+
+    if (zonas.length === 0) {
+        // No hay zonas → dejar que mostrarAlertaLibre() se encargue
+        return;
+    }
+
+    // Determinar el nivel MÁS ALTO para el color de la barra
+    let nivelMax = NIVELES_ALERTA.vigilancia;
+    for (const z of zonas) {
+        const n = NIVELES_ALERTA[z.nivelKey];
+        if (n.orden > nivelMax.orden) nivelMax = n;
+    }
+
+    const vars = [
+        ["--al-color", nivelMax.color],
+        ["--al-color-dark", nivelMax.colorDark],
+        ["--al-glow", nivelMax.glow]
+    ];
+    const aplicarVars = (el) => {
+        if (!el) return;
+        vars.forEach(([k, v]) => el.style.setProperty(k, v));
+    };
+    aplicarVars(barra);
+    aplicarVars(tarjeta);
+
+    barra.classList.remove("al-modo-libre");
+    tarjeta.classList.remove("al-modo-libre");
+
+    // ---- BARRA SUPERIOR AGREGADA ----
+    document.getElementById("al-barra-icono").textContent = nivelMax.iconoBig;
+
+    if (zonas.length === 1) {
+        const z = zonas[0];
+        const n = NIVELES_ALERTA[z.nivelKey];
+        document.getElementById("al-barra-nivel").textContent =
+            (n.nombre + " " + n.icono).toUpperCase();
+        document.getElementById("al-barra-desc").textContent =
+            `${z.sectorOriginal || z.distrito} · ${z.distrito}`;
+    } else {
+        document.getElementById("al-barra-nivel").textContent =
+            `${zonas.length} ZONAS EN ALERTA`;
+        const resumen = zonas
+            .sort((a, b) => NIVELES_ALERTA[b.nivelKey].orden - NIVELES_ALERTA[a.nivelKey].orden)
+            .map(z => {
+                const n = NIVELES_ALERTA[z.nivelKey];
+                return `${n.icono} ${z.distrito}`;
+            })
+            .join(" · ");
+        document.getElementById("al-barra-desc").textContent = resumen;
+    }
+    barra.classList.add("al-visible");
+
+    // ---- TARJETA FLOTANTE AGREGADA ----
+    document.getElementById("al-tarjeta-icono").textContent = nivelMax.iconoBig;
+
+    if (zonas.length === 1) {
+        const z = zonas[0];
+        const n = NIVELES_ALERTA[z.nivelKey];
+        document.getElementById("al-tarjeta-sub").textContent = ("ALERTA " + n.nombre).toUpperCase();
+        document.getElementById("al-tarjeta-titulo").textContent = z.titulo;
+        const cuerpo = [];
+        if (z.sectorOriginal) cuerpo.push(`<strong>🏭 Sector:</strong> ${z.sectorOriginal}`);
+        if (z.distrito)       cuerpo.push(`<strong>📍 Zona:</strong> ${z.distrito}`);
+        if (z.inicio)         cuerpo.push(`<strong>🕒 Inicio:</strong> ${z.inicio}`);
+        if (z.fin)            cuerpo.push(`<strong>⏹️ Fin previsto:</strong> ${z.fin}`);
+        cuerpo.push(`<strong>⚡ Nivel:</strong> ${n.nombre}`);
+        document.getElementById("al-tarjeta-cuerpo").innerHTML = cuerpo.join("<br>");
+    } else {
+        document.getElementById("al-tarjeta-sub").textContent = `${zonas.length} ZONAS EN ALERTA`;
+        document.getElementById("al-tarjeta-titulo").textContent = "Alerta múltiple";
+        const lineas = zonas
+            .sort((a, b) => NIVELES_ALERTA[b.nivelKey].orden - NIVELES_ALERTA[a.nivelKey].orden)
+            .map(z => {
+                const n = NIVELES_ALERTA[z.nivelKey];
+                return `${n.icono} <strong>${z.distrito}</strong> — ${n.nombre}`;
+            });
+        document.getElementById("al-tarjeta-cuerpo").innerHTML = lineas.join("<br>");
+    }
+    tarjeta.classList.add("al-visible");
+}
+
+// ==========================================================
+// CONTADOR SINCRONIZADO (por zona)
+// ==========================================================
+function iniciarContadorSincronizado(timestampInicio, duracionMs, distrito) {
     const el = document.getElementById("al-contador");
     const wrap = document.getElementById("al-contador-wrap");
     if (!el || !wrap) return;
@@ -484,275 +633,72 @@ function iniciarContadorSincronizado(timestampInicio, duracionMs) {
         return [h, m, seg].map(v => String(v).padStart(2, "0")).join(":");
     };
 
-    // Función que calcula el tiempo restante a partir del timestamp real
     const calcularRestante = () => {
         const ahora = Date.now();
         const transcurrido = ahora - timestampInicio;
-        return Math.ceil((duracionMs - transcurrido) / 1000); // segundos restantes
+        return Math.ceil((duracionMs - transcurrido) / 1000);
     };
 
-    // Limpieza de interval previo
-    if (intervalContador) { clearInterval(intervalContador); intervalContador = null; }
+    detenerContador();
 
     const actualizar = () => {
         let restante = calcularRestante();
         if (restante <= 0) {
             el.textContent = "00:00:00";
             el.classList.remove("al-critico");
-
-            clearInterval(intervalContador);
-            intervalContador = null;
-
-            // La alerta expira AHORA. Invalidar cualquier operación
-            // asíncrona que todavía pudiera crear efectos en el mapa.
-            alertaActiva = false;
-            idAlertaMapa++;
-
+            detenerContador();
             detenerSonidoAlerta();
-            limpiarMapaAlerta();
-
-            // Restaurar inmediatamente el estado normal.
-            mostrarAlertaLibre();
+            // Esta zona expiró: quitarla
+            quitarAlerta(distrito);
             return;
         }
         el.textContent = formatear(restante);
-        // Últimos 60 segundos: parpadeo crítico
-        if (restante <= 60) {
-            el.classList.add("al-critico");
-        } else {
-            el.classList.remove("al-critico");
-        }
+        if (restante <= 60) el.classList.add("al-critico");
+        else el.classList.remove("al-critico");
     };
 
-    // Actualización inmediata + intervalo de 1 segundo
     actualizar();
-    intervalContador = setInterval(actualizar, 1000);
+    estado.intervalContador = setInterval(actualizar, 1000);
 }
 
-// ----------------------------------------------------------
-// 3. Timestamp "Hace X minutos" en la barra superior
-// ----------------------------------------------------------
-function iniciarTimestampBarra() {
+function detenerContador() {
+    if (estado.intervalContador) {
+        clearInterval(estado.intervalContador);
+        estado.intervalContador = null;
+    }
+}
+
+// ==========================================================
+// TIMESTAMP "Hace X min" EN LA BARRA
+// ==========================================================
+function actualizarTimestampBarra(timestampInicio) {
     const el = document.getElementById("al-barra-tiempo");
     if (!el) return;
+
     const actualizar = () => {
-        if (!tiempoInicioAlerta) return;
-        const diff = Math.floor((Date.now() - tiempoInicioAlerta) / 1000);
+        if (!timestampInicio) return;
+        const diff = Math.floor((Date.now() - timestampInicio) / 1000);
         let txt;
         if (diff < 60) txt = `Hace ${diff} seg`;
         else if (diff < 3600) txt = `Hace ${Math.floor(diff / 60)} min`;
         else txt = `Hace ${Math.floor(diff / 3600)} h`;
         el.textContent = txt;
     };
+
     actualizar();
-    if (intervalTimestamp) clearInterval(intervalTimestamp);
-    intervalTimestamp = setInterval(actualizar, 15000);
+    if (estado.intervalTimestamp) clearInterval(estado.intervalTimestamp);
+    estado.intervalTimestamp = setInterval(actualizar, 15000);
 }
 
-// ----------------------------------------------------------
-// 7. MAPA ILUMINADO (círculo rojo parpadeante + rayo)
-// ----------------------------------------------------------
-async function iluminarMapa(lat, lng, nivelKey, miIdAlerta) {
-    try {
-        const mod = await obtenerModuloMapa();
-
-        // La alerta pudo expirar mientras esperábamos el módulo.
-        if (!alertaActiva || miIdAlerta !== idAlertaMapa) {
-            return;
-        }
-
-        if (!mod || typeof mod.iluminarDistrito !== "function") {
-            // Compatibilidad con versiones antiguas.
-            iluminarMapaLegacy(lat, lng, nivelKey);
-
-            if (!alertaActiva || miIdAlerta !== idAlertaMapa) {
-                limpiarMapaAlerta();
-            }
-            return;
-        }
-
-        const capa = await mod.iluminarDistrito(lat, lng, nivelKey);
-
-        // Si la alerta terminó durante el await, destruir inmediatamente
-        // la capa recién creada en lugar de dejarla visible.
-        if (!alertaActiva || miIdAlerta !== idAlertaMapa) {
-            if (capa && typeof capa.detener === "function") {
-                capa.detener();
-            }
-            return;
-        }
-
-        capaMapaAlerta = capa;
-
-    } catch (e) {
-        console.warn("alertas.js: error iluminando mapa", e);
-    }
-}
-
-// Respaldo para una versión antigua de map.js.
-// La versión actual de map.js es la que se utiliza normalmente.
-function iluminarMapaLegacy(lat, lng, nivelKey) {
-    try {
-        if (typeof L === "undefined") return;
-
-        const nivel = NIVELES_ALERTA[nivelKey] || NIVELES_ALERTA.roja;
-        const mapEl = document.getElementById("map");
-        if (!mapEl) return;
-
-        const mapInstance = Object.values(L._maps || {})
-            .find(m => m.getContainer() === mapEl)
-            || window.__leafMap
-            || null;
-
-        if (!mapInstance) return;
-        mapaRef = mapInstance;
-
-        const color = nivel.color;
-
-        const nucleo = L.circleMarker([lat, lng], {
-            radius: 10,
-            color: "#fff",
-            weight: 2,
-            fillColor: color,
-            fillOpacity: 0.95
-        }).addTo(mapInstance);
-
-        const rayoIcon = L.divIcon({
-            className: "al-mapa-rayo",
-            html: SVG_RAYO_MAPA,
-            iconSize: [50, 50],
-            iconAnchor: [25, 25]
-        });
-        const rayoMarker = L.marker([lat, lng], {
-            icon: rayoIcon,
-            zIndexOffset: 2000
-        }).addTo(mapInstance);
-
-        const pulsoIcon = L.divIcon({
-            className: "",
-            html: `<div style="width:40px;height:40px;border-radius:50%;
-                     border:3px solid ${color};position:relative;
-                     animation:al-radar-pulso 2s ease-out infinite;"></div>`,
-            iconSize: [40, 40],
-            iconAnchor: [20, 20]
-        });
-        const pulsoMarker = L.marker([lat, lng], {
-            icon: pulsoIcon,
-            zIndexOffset: 1900
-        }).addTo(mapInstance);
-
-        capaMapaAlerta = {
-            map: mapInstance,
-            nucleo,
-            rayoMarker,
-            pulsoMarker,
-            detener() {
-                try { mapInstance.removeLayer(nucleo); } catch (e) {}
-                try { mapInstance.removeLayer(rayoMarker); } catch (e) {}
-                try { mapInstance.removeLayer(pulsoMarker); } catch (e) {}
-            }
-        };
-
-        mapInstance.flyTo([lat, lng], 12, { duration: 1.4 });
-
-    } catch (e) {
-        console.warn("alertas.js: iluminarMapaLegacy falló", e);
-    }
-}
-
-function limpiarMapaAlerta() {
-    try {
-        if (intervalRayoMapa) {
-            clearInterval(intervalRayoMapa);
-            intervalRayoMapa = null;
-        }
-
-        if (!capaMapaAlerta) return;
-
-        const capa = capaMapaAlerta;
-        capaMapaAlerta = null;
-
-        // La implementación actual de map.js elimina los tres elementos.
-        if (typeof capa.detener === "function") {
-            capa.detener();
-            return;
-        }
-
-        // Compatibilidad con objetos de versiones anteriores.
-        if (capa.map) {
-            ["circulo", "circuloMedio", "nucleo", "rayoMarker", "pulsoMarker"]
-                .forEach(nombre => {
-                    if (capa[nombre]) {
-                        try { capa.map.removeLayer(capa[nombre]); } catch (e) {}
-                    }
-                });
-        }
-
-    } catch (e) {
-        capaMapaAlerta = null;
-        console.warn("alertas.js: error limpiando mapa de alerta", e);
-    }
-}
-
-// ----------------------------------------------------------
-// PINTAR POLÍGONO DE ZONA EN EL MAPA
-// ----------------------------------------------------------
-async function pintarZonaEnMapa(nombreZona, color, miIdAlerta) {
-    try {
-        const mod = await obtenerModuloMapa();
-        if (!mod || typeof mod.pintarPoligonoZona !== "function") return;
-
-        await mod.pintarPoligonoZona(nombreZona, color);
-
-        // No permitir que un polígono creado tarde sobreviva a la alerta.
-        if (!alertaActiva || miIdAlerta !== idAlertaMapa) {
-            if (typeof mod.limpiarPoligonosZona === "function") {
-                mod.limpiarPoligonosZona();
-            }
-        }
-    } catch (e) {
-        console.warn("alertas.js: error pintando zona", e);
-    }
-}
-
-// ----------------------------------------------------------
-// ILUMINAR ZONA EN EL MAPA (efecto del rayo sobre punto real)
-// ----------------------------------------------------------
-// Busca el punto real de la zona en el GeoJSON (lugares.json)
-// y pinta el efecto del rayo (círculos concéntricos + rayo SVG)
-// sobre ese punto.
-async function iluminarZonaEnMapa(nombreZona, nivelKey) {
-    try {
-        const mod = await obtenerModuloMapa();
-        if (mod && typeof mod.iluminarDistritoZona === "function") {
-            await mod.iluminarDistritoZona(nombreZona, nivelKey);
-        }
-    } catch (e) {
-        console.warn("alertas.js: error iluminando zona en mapa", e);
-    }
-}
-
-// ----------------------------------------------------------
-// MOSTRAR BARRA SUPERIOR + TARJETA "LIBRE DE ALERTAS" (verde persistente)
-// ----------------------------------------------------------
-// Esta función muestra SOLAMENTE la barra superior verde y la
-// tarjeta flotante verde indicando "LIBRE DE ALERTAS", SIN el
-// overlay a pantalla completa. Estas dos elementos se quedan
-// visibles permanentemente hasta que el admin lance una alerta
-// amarilla/naranja/roja (en cuyo caso se reemplazan por las del
-// nivel correspondiente).
-//
-// Se llama:
-//  - Al cerrar el banner del overlay (cerrarAlerta) si no hay
-//    alerta activa del admin.
-//  - Como parte de mostrarAlertaLibre() (junto con el overlay).
+// ==========================================================
+// MOSTRAR BARRA + TARJETA "LIBRE DE ALERTAS"
+// ==========================================================
 export function mostrarBarraTarjetaLibre() {
     try {
         asegurarEstructuraDOM();
 
         const nivel = NIVELES_ALERTA.vigilancia;
 
-        // Aplicar variables CSS del nivel verde a barra y tarjeta
         const vars = [
             ["--al-color", nivel.color],
             ["--al-color-dark", nivel.colorDark],
@@ -769,18 +715,15 @@ export function mostrarBarraTarjetaLibre() {
         aplicarVars(barra);
         aplicarVars(tarjeta);
 
-        // Marcar barra y tarjeta como modo "libre" (verde persistente)
         barra?.classList.add("al-modo-libre");
         tarjeta?.classList.add("al-modo-libre");
 
-        // ----- BARRA SUPERIOR VERDE -----
         document.getElementById("al-barra-icono").textContent = "✅";
         document.getElementById("al-barra-nivel").textContent = "LIBRE DE ALERTAS";
         document.getElementById("al-barra-desc").textContent = "Sistema en vigilancia — sin alertas activas";
         document.getElementById("al-barra-tiempo").textContent = "Vigilancia";
         barra?.classList.add("al-visible");
 
-        // ----- TARJETA FLOTANTE VERDE -----
         document.getElementById("al-tarjeta-icono").textContent = "✅";
         document.getElementById("al-tarjeta-sub").textContent = "VIGILANCIA";
         document.getElementById("al-tarjeta-titulo").textContent = "Libre de alertas";
@@ -794,34 +737,29 @@ export function mostrarBarraTarjetaLibre() {
     }
 }
 
-// ----------------------------------------------------------
-// MOSTRAR ESTADO "LIBRE DE ALERTAS" (verde por defecto)
-// ----------------------------------------------------------
-// Esta función muestra la notificación full-screen en verde
-// indicando que no hay alertas activas. Se muestra al cargar
-// la página y cuando el usuario consulta sin que el admin haya
-// emitido ninguna alerta.
+// ==========================================================
+// MOSTRAR ESTADO "LIBRE DE ALERTAS"
+// ==========================================================
 export function mostrarAlertaLibre() {
     try {
         asegurarEstructuraDOM();
-        detenerIntervalos();
-        idAlertaMapa++;
-        limpiarMapaAlerta();
+        detenerContador();
         detenerSonidoAlerta();
 
-        // Limpiar polígonos de zona
+        // Limpiar TODOS los polígonos del mapa
         obtenerModuloMapa().then(mod => {
             if (mod && typeof mod.limpiarPoligonosZona === "function") {
                 mod.limpiarPoligonosZona();
             }
         }).catch(() => {});
 
-        alertaActiva = false;
-        tiempoInicioAlerta = null;
+        // Reset estado
+        estado.zonasActivas.clear();
+        estado.colaBanners = [];
+        estado.bannerActual = null;
 
         const nivel = NIVELES_ALERTA.vigilancia;
 
-        // Aplicar variables CSS del nivel verde
         const vars = [
             ["--al-color", nivel.color],
             ["--al-color-dark", nivel.colorDark],
@@ -837,7 +775,6 @@ export function mostrarAlertaLibre() {
         aplicarVars(document.getElementById("al-tarjeta"));
         aplicarVars(document.getElementById("al-modal-seguridad"));
 
-        // Configurar contenido para "Libre de alertas"
         document.getElementById("al-icono-big").textContent = "✅";
         document.getElementById("al-nivel-badge").textContent = "VIGILANCIA";
         document.getElementById("al-nivel-badge").style.background = nivel.color;
@@ -847,23 +784,21 @@ export function mostrarAlertaLibre() {
         document.getElementById("al-recomendacion-texto").textContent =
             "Manténgase informado sobre el desarrollo del clima.";
 
-        // Ocultar contador (no hay timer en estado libre)
         const wrap = document.getElementById("al-contador-wrap");
         if (wrap) wrap.style.display = "none";
 
-        // Mostrar overlay con clase de estado libre (verde sereno)
         const panel = document.getElementById("al-panel");
         panel.classList.remove("al-resplandor-activo", "al-sirena-activa");
         void panel.offsetWidth;
         const overlay = document.getElementById("al-overlay");
         overlay.classList.add("al-visible", "al-libre");
 
-        // Mostrar también la barra superior verde y la tarjeta flotante
-        // verde de forma persistente (se quedarán visibles después de que
-        // el usuario cierre el overlay, hasta que el admin lance una alerta)
+        // Ocultar indicador de cola
+        const cola = document.getElementById("al-cola-indicador");
+        if (cola) cola.style.display = "none";
+
         mostrarBarraTarjetaLibre();
 
-        // Enfocar el botón de cerrar
         setTimeout(() => document.getElementById("al-btn-cerrar")?.focus(), 1000);
 
     } catch (e) {
@@ -871,54 +806,64 @@ export function mostrarAlertaLibre() {
     }
 }
 
-// ----------------------------------------------------------
-// 12. BOTONES DE ACCIÓN
-// ----------------------------------------------------------
+// ==========================================================
+// BOTONES DE ACCIÓN
+// ==========================================================
 function verMapaAlerta() {
     try {
-        cerrarBanner(); // quitar el overlay para ver el mapa
-        if (capaMapaAlerta && capaMapaAlerta.map) {
-            // ya está iluminado; solo asegurar zoom
-        }
+        cerrarBanner();
         const mapEl = document.getElementById("map");
-        if (mapEl) {
-            mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-    } catch (e) { /* no crítico */ }
+        if (mapEl) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (e) {}
 }
 
 function abrirBannerDeNuevo() {
-    const overlay = document.getElementById("al-overlay");
-    if (overlay && !overlay.classList.contains("al-visible")) {
-        overlay.classList.add("al-visible");
-        const panel = document.getElementById("al-panel");
-        if (panel) {
-            panel.classList.remove("al-sirena-activa");
-            void panel.offsetWidth;
-            panel.classList.add("al-sirena-activa");
+    // Si hay banner actual, mostrarlo
+    if (estado.bannerActual) {
+        const overlay = document.getElementById("al-overlay");
+        if (overlay && !overlay.classList.contains("al-visible")) {
+            overlay.classList.add("al-visible");
+            const panel = document.getElementById("al-panel");
+            if (panel) {
+                panel.classList.remove("al-sirena-activa");
+                void panel.offsetWidth;
+                panel.classList.add("al-sirena-activa");
+            }
         }
+    } else if (estado.colaBanners.length > 0) {
+        mostrarSiguienteBanner();
+    } else if (estado.zonasActivas.size > 0) {
+        // Re-encolar todas las zonas activas para mostrar sus banners
+        estado.colaBanners = Array.from(estado.zonasActivas.keys());
+        mostrarSiguienteBanner();
     }
 }
 
-// ----------------------------------------------------------
+// ==========================================================
 // MODAL DE MEDIDAS DE SEGURIDAD
-// ----------------------------------------------------------
+// ==========================================================
 function mostrarModalSeguridad() {
     try {
-        // Determinar nivel activo (leído del badge)
-        const badge = document.getElementById("al-nivel-badge");
-        const nivelNombre = (badge?.textContent || "Emergencia").toLowerCase();
-        let nivelKey = Object.keys(NIVELES_ALERTA).find(k =>
-            NIVELES_ALERTA[k].nombre.toLowerCase() === nivelNombre);
-        if (!nivelKey) nivelKey = "emergencia";
+        // Nivel: el del banner actual si hay, o el más alto de zonas activas
+        let nivelKey = "roja";
+        if (estado.bannerActual) {
+            const z = estado.zonasActivas.get(estado.bannerActual);
+            if (z) nivelKey = z.nivelKey;
+        } else if (estado.zonasActivas.size > 0) {
+            let max = NIVELES_ALERTA.vigilancia;
+            for (const z of estado.zonasActivas.values()) {
+                const n = NIVELES_ALERTA[z.nivelKey];
+                if (n.orden > max.orden) max = n;
+            }
+            nivelKey = max === NIVELES_ALERTA.vigilancia ? "roja" :
+                Object.keys(NIVELES_ALERTA).find(k => NIVELES_ALERTA[k] === max) || "roja";
+        }
         const nivel = NIVELES_ALERTA[nivelKey];
 
-        // Subtítulo
         document.getElementById("al-modal-sub").textContent =
             ("NIVEL: " + nivel.nombre).toUpperCase();
         document.getElementById("al-modal-seguridad").style.setProperty("--al-color", nivel.color);
 
-        // Leyenda de niveles (característica #9)
         const leyenda = document.getElementById("al-leyenda");
         leyenda.innerHTML = "";
         Object.entries(NIVELES_ALERTA).forEach(([k, n]) => {
@@ -931,10 +876,10 @@ function mostrarModalSeguridad() {
             leyenda.appendChild(item);
         });
 
-        // Medidas
         const lista = document.getElementById("al-medidas-lista");
         lista.innerHTML = "";
-        MEDIDAS_SEGURIDAD[nivelKey].forEach(m => {
+        const medidas = MEDIDAS_SEGURIDAD[nivelKey] || MEDIDAS_SEGURIDAD.roja;
+        medidas.forEach(m => {
             const d = document.createElement("div");
             d.className = "al-medida";
             d.innerHTML = `<span class="al-medida-icono">${m.icono}</span><span class="al-medida-texto">${m.texto}</span>`;
@@ -951,74 +896,69 @@ function cerrarModalSeguridad() {
     document.getElementById("al-modal-seguridad")?.classList.remove("al-visible");
 }
 
-// ----------------------------------------------------------
-// CERRAR ALERTA
-// ----------------------------------------------------------
-function cerrarBanner() {
-    const overlay = document.getElementById("al-overlay");
-    overlay?.classList.remove("al-visible");
-    overlay?.classList.remove("al-libre");
+// ==========================================================
+// FLASH DE FONDO
+// ==========================================================
+function activarFlashFondo() {
+    try {
+        const body = document.body;
+        body.classList.remove("al-flash-activo");
+        void body.offsetWidth;
+        body.classList.add("al-flash-activo");
+        setTimeout(() => body.classList.remove("al-flash-activo"), 4600);
+    } catch (e) {}
 }
 
+// ==========================================================
+// CERRAR / OCULTAR
+// ==========================================================
 function ocultarBarraSuperior() {
-    // En modo "libre" (verde persistente) la barra SIEMPRE se queda
-    // visible: el usuario no puede ocultarla manualmente.
     const barra = document.getElementById("al-barra-superior");
     if (barra?.classList.contains("al-modo-libre")) return;
+    // Si hay zonas activas, la barra se queda visible (no se puede ocultar)
+    if (estado.zonasActivas.size > 0) return;
     barra?.classList.remove("al-visible");
-    if (intervalTimestamp) { clearInterval(intervalTimestamp); intervalTimestamp = null; }
+    if (estado.intervalTimestamp) {
+        clearInterval(estado.intervalTimestamp);
+        estado.intervalTimestamp = null;
+    }
 }
 
 function ocultarTarjeta() {
-    // En modo "libre" (verde persistente) la tarjeta SIEMPRE se queda
-    // visible: el usuario no puede ocultarla manualmente.
     const tarjeta = document.getElementById("al-tarjeta");
     if (tarjeta?.classList.contains("al-modo-libre")) return;
+    if (estado.zonasActivas.size > 0) return;
     tarjeta?.classList.remove("al-visible");
 }
 
 export function cerrarAlerta() {
-    cerrarBanner();
-    detenerSonidoAlerta();
-    // NOTA: No se detienen los intervalos del contador aquí.
-    // El usuario cierra solo el overlay del banner, pero el
-    // contador sincronizado y la barra/tarjeta siguen visibles.
-    //
-    // Si no hay una alerta activa (estado libre), asegurar que
-    // la barra y tarjeta verdes persistentes se muestren.
-    if (!alertaActiva) {
-        mostrarBarraTarjetaLibre();
-    }
+    cerrarBannerActual();
 }
 
-// Cierre total (limpia TODO: banner, barra, tarjeta, mapa, intervalos)
 export function cerrarAlertaTotal() {
     cerrarBanner();
     ocultarBarraSuperior();
     ocultarTarjeta();
     cerrarModalSeguridad();
-    detenerIntervalos();
-    idAlertaMapa++;
+    detenerContador();
     detenerSonidoAlerta();
-    limpiarMapaAlerta();
-    // Limpiar polígonos de zona
+    estado.zonasActivas.clear();
+    estado.colaBanners = [];
+    estado.bannerActual = null;
     obtenerModuloMapa().then(mod => {
         if (mod && typeof mod.limpiarPoligonosZona === "function") {
             mod.limpiarPoligonosZona();
         }
     }).catch(() => {});
-    alertaActiva = false;
 }
 
-function detenerIntervalos() {
-    if (intervalContador) { clearInterval(intervalContador); intervalContador = null; }
-    if (intervalSirena) { clearInterval(intervalSirena); intervalSirena = null; }
-    if (intervalTimestamp) { clearInterval(intervalTimestamp); intervalTimestamp = null; }
-}
-
-// ----------------------------------------------------------
-// Utilidad: ¿hay una alerta activa?
-// ----------------------------------------------------------
+// ==========================================================
+// UTILIDADES
+// ==========================================================
 export function hayAlertaActiva() {
-    return alertaActiva;
+    return estado.zonasActivas.size > 0;
+}
+
+export function obtenerZonasActivas() {
+    return Array.from(estado.zonasActivas.values());
 }
