@@ -1,0 +1,14 @@
+{
+  "actualizado": "2026-09-28T00:00:00.000Z",
+  "estadoGlobal": "VERDE",
+  "estadoGlobalNumero": 0,
+  "totalSectores": 4,
+  "resumen": { "roja": 0, "naranja": 0, "amarilla": 0, "verde": 4 },
+  "sectores": [
+    { "nombre": "Campamento Yanacancha", "nivel": "VERDE", "nivelNumero": 0, "color": "#2ECC71", "inicio": null, "fin": null },
+    { "nombre": "Oficinas Mina",         "nivel": "VERDE", "nivelNumero": 0, "color": "#2ECC71", "inicio": null, "fin": null },
+    { "nombre": "Tucush",                "nivel": "VERDE", "nivelNumero": 0, "color": "#2ECC71", "inicio": null, "fin": null },
+    { "nombre": "Tajo",                  "nivel": "VERDE", "nivelNumero": 0, "color": "#2ECC71", "inicio": null, "fin": null }
+  ],
+  "alertas": []
+}
