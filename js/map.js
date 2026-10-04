@@ -1,8 +1,7 @@
 // js/map.js
 // ============================================================
 //  Mapa Leaflet — Antamina
-//  v3: soporta MÚLTIPLES polígonos de zona simultáneos
-//      (uno por zona activa), y permite quitar uno solo.
+//  v4: zoom en bottomright + filtrarLugares() exportado
 // ============================================================
 
 let map;
@@ -10,12 +9,12 @@ let geoLayer;
 let markerSeleccionado = null;
 
 const MAPTILER_KEY = "j4zAW83dNrfEbSRUvYN0";
-const MAP_STYLE = "hybrid-v4";
+const MAP_STYLE    = "hybrid-v4";
 
-let markerUbicacion = null;
-let circleAccuracy = null;
-let watchId = null;
-let iconoTu = null;
+let markerUbicacion  = null;
+let circleAccuracy   = null;
+let watchId          = null;
+let iconoTu          = null;
 
 // ======================================================
 // Paleta unificada
@@ -25,7 +24,6 @@ const COLORES_NIVEL = {
     amarilla:   "#f1c40f",
     naranja:    "#e67e22",
     roja:       "#e74c3c",
-    // Alias legacy
     precaucion: "#f1c40f",
     alerta:     "#e67e22",
     emergencia: "#e74c3c"
@@ -37,14 +35,12 @@ function colorDeNivel(nivelKey) {
 
 // ======================================================
 //  MAPA DE POLÍGONOS ACTIVOS
-//  Estructura: Map<nombreZona, { poligono, color }>
-//  Así podemos tener N zonas pintadas a la vez.
 // ======================================================
-const poligonosActivos = new Map();  // nombreZona -> { poligono, color }
+const poligonosActivos = new Map();
 let zonasData = null;
 
 // ======================================================
-// ILUMINAR DISTRITO — rayo + núcleo + pulso sobre un punto
+// ILUMINAR DISTRITO
 // ======================================================
 export function iluminarDistrito(lat, lng, nivelKey = "roja") {
     if (!map) return null;
@@ -52,11 +48,8 @@ export function iluminarDistrito(lat, lng, nivelKey = "roja") {
     const color = colorDeNivel(nivelKey);
 
     const nucleo = L.circleMarker([lat, lng], {
-        radius: 10,
-        color: "#fff",
-        weight: 2,
-        fillColor: color,
-        fillOpacity: 0.95
+        radius: 10, color: "#fff", weight: 2,
+        fillColor: color, fillOpacity: 0.95
     }).addTo(map);
 
     const rayoIcon = L.divIcon({
@@ -65,12 +58,10 @@ export function iluminarDistrito(lat, lng, nivelKey = "roja") {
                  <polygon points="58,5 30,52 48,52 38,95 72,42 52,42 62,5"
                           fill="#ffeb3b" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
                </svg>`,
-        iconSize: [50, 50],
-        iconAnchor: [25, 25]
+        iconSize: [50, 50], iconAnchor: [25, 25]
     });
     const rayoMarker = L.marker([lat, lng], {
-        icon: rayoIcon,
-        zIndexOffset: 2000
+        icon: rayoIcon, zIndexOffset: 2000
     }).addTo(map);
 
     const pulsoIcon = L.divIcon({
@@ -78,8 +69,7 @@ export function iluminarDistrito(lat, lng, nivelKey = "roja") {
         html: `<div style="width:40px;height:40px;border-radius:50%;
                  border:3px solid ${color};position:relative;
                  animation:al-radar-pulso 2s ease-out infinite;"></div>`,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20]
+        iconSize: [40, 40], iconAnchor: [20, 20]
     });
     const pulsoMarker = L.marker([lat, lng], { icon: pulsoIcon, zIndexOffset: 1900 }).addTo(map);
 
@@ -93,12 +83,8 @@ export function iluminarDistrito(lat, lng, nivelKey = "roja") {
     const intervalParpadeo = setInterval(() => {
         pulsoVisible = !pulsoVisible;
         const elementoPulso = pulsoMarker.getElement();
-        if (elementoPulso) {
-            elementoPulso.style.opacity = pulsoVisible ? "1" : "0.35";
-        }
-        if (nucleo) {
-            nucleo.setStyle({ fillOpacity: pulsoVisible ? 0.95 : 0.55 });
-        }
+        if (elementoPulso) elementoPulso.style.opacity = pulsoVisible ? "1" : "0.35";
+        if (nucleo) nucleo.setStyle({ fillOpacity: pulsoVisible ? 0.95 : 0.55 });
     }, 700);
 
     map.flyTo([lat, lng], 12, { duration: 1.4 });
@@ -115,13 +101,12 @@ export function iluminarDistrito(lat, lng, nivelKey = "roja") {
 }
 
 // ======================================================
-// ILUMINAR ZONA DESDE GEOJSON (lugares.json)
+// ILUMINAR ZONA DESDE GEOJSON
 // ======================================================
 export async function iluminarDistritoZona(nombreZona, nivelKey = "roja") {
     if (!map) return null;
 
     const color = colorDeNivel(nivelKey);
-
     let puntoEncontrado = null;
 
     const zonaLower = (nombreZona || "").toLowerCase();
@@ -140,8 +125,7 @@ export async function iluminarDistritoZona(nombreZona, nivelKey = "roja") {
                 if (nombre.includes(nombreBusqueda) || nombreBusqueda.includes(nombre)) {
                     const coords = f.geometry.coordinates;
                     puntoEncontrado = {
-                        lat: coords[1],
-                        lng: coords[0],
+                        lat: coords[1], lng: coords[0],
                         nombre: f.properties?.Name || nombreZona,
                         layer: layer
                     };
@@ -161,14 +145,12 @@ export async function iluminarDistritoZona(nombreZona, nivelKey = "roja") {
                 );
                 if (zona) {
                     puntoEncontrado = {
-                        lat: zona.lat,
-                        lng: zona.lng,
-                        nombre: zona.nombre,
-                        layer: null
+                        lat: zona.lat, lng: zona.lng,
+                        nombre: zona.nombre, layer: null
                     };
                 }
             }
-        } catch (e) { /* fallback ya manejado */ }
+        } catch (e) {}
     }
 
     if (!puntoEncontrado) {
@@ -249,7 +231,12 @@ export async function iluminarDistritoZona(nombreZona, nivelKey = "roja") {
 // CREAR MAPA
 // ======================================================
 export function crearMapa(idDiv) {
-    map = L.map(idDiv);
+
+    // ⬅️ CORREGIDO: desactivar zoom por defecto
+    map = L.map(idDiv, { zoomControl: false });
+
+    // ⬅️ NUEVO: zoom en bottomright
+    L.control.zoom({ position: "bottomright" }).addTo(map);
 
     iconoTu = L.divIcon({
         className: "",
@@ -278,6 +265,7 @@ export function crearMapa(idDiv) {
         btnUbicacion.addEventListener("click", mostrarMiUbicacion);
     }
 
+    // ⬅️ CORREGIDO: incluir filtrarLugares en el return
     return { cargarGeoJSON, irA, limpiarSeleccion, filtrarLugares };
 }
 
@@ -285,6 +273,7 @@ export function crearMapa(idDiv) {
 // MOSTRAR MI UBICACIÓN
 // ======================================================
 function mostrarMiUbicacion() {
+
     const btn = document.getElementById("btn-ubicacion");
 
     if (!navigator.geolocation) {
@@ -348,17 +337,10 @@ function mostrarMiUbicacion() {
             btn.classList.remove("buscar");
             let mensaje = "No se pudo obtener tu ubicación.\n\n";
             switch (error.code) {
-                case error.PERMISSION_DENIED:
-                    mensaje += "⛔ Permiso denegado.";
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    mensaje += "📡 Posición no disponible.";
-                    break;
-                case error.TIMEOUT:
-                    mensaje += "⏱️ Tiempo agotado.";
-                    break;
-                default:
-                    mensaje += "Error desconocido: " + error.message;
+                case error.PERMISSION_DENIED:    mensaje += "⛔ Permiso denegado."; break;
+                case error.POSITION_UNAVAILABLE: mensaje += "📡 Posición no disponible."; break;
+                case error.TIMEOUT:              mensaje += "⏱️ Tiempo agotado."; break;
+                default:                         mensaje += "Error desconocido: " + error.message;
             }
             alert(mensaje);
         },
@@ -391,6 +373,32 @@ function cargarGeoJSON(lugares) {
     }).addTo(map);
 
     map.fitBounds(geoLayer.getBounds(), { padding: [30, 30] });
+}
+
+// ======================================================
+// ⬅️ NUEVO: FILTRAR LUGARES
+// ======================================================
+export function filtrarLugares(predicado) {
+    if (!geoLayer || typeof predicado !== "function") return 0;
+
+    let visibles = 0;
+
+    geoLayer.eachLayer(layer => {
+        const f = layer.feature;
+        if (!f) return;
+
+        const props = f.properties || {};
+        const mostrar = predicado(props);
+
+        if (mostrar) {
+            if (!map.hasLayer(layer)) layer.addTo(map);
+            visibles++;
+        } else {
+            if (map.hasLayer(layer)) map.removeLayer(layer);
+        }
+    });
+
+    return visibles;
 }
 
 function limpiarSeleccion() {
@@ -437,21 +445,11 @@ async function cargarZonas() {
 }
 
 // ======================================================
-// PINTAR POLÍGONO DE ZONA (SOPORTA N SIMULTÁNEOS)
+// PINTAR POLÍGONO DE ZONA
 // ======================================================
-/**
- * Pinta el polígono de la zona indicada SIN borrar los demás.
- * Si ya existía un polígono para esa zona, lo reemplaza (borra
- * el anterior y pinta el nuevo con el color actualizado).
- *
- * @param {string} nombreZona - Nombre de la zona (ej: "Zona 1 - Campamentos")
- * @param {string} color - Color hex (ej: "#e74c3c")
- * @returns {Promise<object|null>}
- */
 export async function pintarPoligonoZona(nombreZona, color = "#e74c3c") {
     if (!map) return null;
 
-    // Si ya hay un polígono para esa zona, quitarlo (para repintar con nuevo color)
     quitarPoligonoZona(nombreZona);
 
     const data = await cargarZonas();
@@ -480,14 +478,7 @@ export async function pintarPoligonoZona(nombreZona, color = "#e74c3c") {
         `<b>⚡ ${zona.nombre}</b><br>Zona bajo alerta meteorológica`
     );
 
-    // Registrar en el Map de polígonos activos
     poligonosActivos.set(zona.nombre, { poligono, color });
-
-    // NO hacemos flyTo aquí para no mover el mapa cada vez que se
-    // pinta una nueva zona. El flyTo se hace una sola vez cuando
-    // se recibe la primera alerta (ver iluminarDistrito).
-    // Si quieres que vuele, descomenta:
-    // if (zona.lat && zona.lng) map.flyTo([zona.lat, zona.lng], 13, { duration: 1.4 });
 
     return {
         zona, poligono,
@@ -498,70 +489,5 @@ export async function pintarPoligonoZona(nombreZona, color = "#e74c3c") {
 // ======================================================
 // QUITAR UN POLÍGONO ESPECÍFICO
 // ======================================================
-/**
- * Quita el polígono de una zona específica (por nombre).
- * @param {string} nombreZona
- * @returns {boolean} true si se quitó algo, false si no existía
- */
 export function quitarPoligonoZona(nombreZona) {
-    if (!map) return false;
-
-    // Buscar por nombre exacto o parcial
-    for (const [key, entry] of poligonosActivos.entries()) {
-        if (key === nombreZona ||
-            key.includes(nombreZona) ||
-            nombreZona.includes(key)) {
-            try { map.removeLayer(entry.poligono); } catch (e) {}
-            poligonosActivos.delete(key);
-            return true;
-        }
-    }
-    return false;
-}
-
-// ======================================================
-// QUITAR TODOS LOS POLÍGONOS
-// ======================================================
-export function limpiarPoligonosZona() {
-    if (!map) return;
-    for (const [, entry] of poligonosActivos.entries()) {
-        try { map.removeLayer(entry.poligono); } catch (e) {}
-    }
-    poligonosActivos.clear();
-}
-
-// ======================================================
-// CONSULTAR POLÍGONOS ACTIVOS (útil para debug)
-// ======================================================
-export function obtenerPoligonosActivos() {
-    return Array.from(poligonosActivos.keys());
-}
-// ======================================================
-// FILTRAR LUGARES (oculta/muestra capas existentes)
-// ------------------------------------------------------
-// Recibe un predicado (props) => boolean.
-// NO reconstruye geoLayer → rápido y sin parpadeos.
-// Devuelve el número de features visibles.
-// ======================================================
-export function filtrarLugares(predicado) {
-    if (!geoLayer || typeof predicado !== "function") return 0;
-
-    let visibles = 0;
-
-    geoLayer.eachLayer(layer => {
-        const f = layer.feature;
-        if (!f) return;
-
-        const props = f.properties || {};
-        const mostrar = predicado(props);
-
-        if (mostrar) {
-            if (!map.hasLayer(layer)) layer.addTo(map);
-            visibles++;
-        } else {
-            if (map.hasLayer(layer)) map.removeLayer(layer);
-        }
-    });
-
-    return visibles;
-}
+    if (!map)
