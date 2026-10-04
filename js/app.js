@@ -6,7 +6,8 @@
 // que actúa como RESPALDO si admin.html no está abierto.
 // ======================================================
 
-import { cargarLugares } from "./data.js";
+//import { cargarLugares } from "./data.js";
+import { cargarLugares, obtenerCarpetas } from "./data.js";
 import { crearBuscador, teclado } from "./search.js";
 import { crearMapa } from "./map.js";
 import { inicializarFirebase } from "./notifications.js";
@@ -37,6 +38,8 @@ async function iniciar() {
     try {
 
         stats.textContent = "Cargando lugares...";
+        // Filtros de carpeta y tipo
+        inicializarFiltros(lugares, mapa);
 
         lugares = await cargarLugares();
 
@@ -242,3 +245,68 @@ configurarBotonConsulta();
 //======================================================
 
 iniciar();
+// ======================================================
+// FILTROS: carpeta + tipo
+// ======================================================
+
+function inicializarFiltros(lugares, mapa) {
+
+    const selectCarpeta = document.getElementById("folder-select");
+    const botonesTipo   = document.querySelectorAll(".type-btn");
+
+    if (!selectCarpeta) return;
+
+    // 1) Poblar el select con las carpetas detectadas
+    const carpetas = obtenerCarpetas(lugares);
+    selectCarpeta.innerHTML =
+        `<option value="__all__">📁 Todas las carpetas</option>` +
+        carpetas.map(c =>
+            `<option value="${escapeHtml(c)}">📁 ${escapeHtml(c)}</option>`
+        ).join("");
+
+    // 2) Estado de filtros
+    let filtroCarpeta = "__all__";
+    let filtroTipo    = "all";
+
+    // 3) Función que aplica ambos filtros al mapa
+    function aplicar() {
+        const visibles = mapa.filtrarLugares(props => {
+            const okCarpeta =
+                filtroCarpeta === "__all__" ||
+                (props.carpeta || "(Raíz)") === filtroCarpeta;
+
+            const okTipo =
+                filtroTipo === "all" ||
+                props.tipo === filtroTipo;
+
+            return okCarpeta && okTipo;
+        });
+
+        stats.textContent = `${visibles} lugares visibles`;
+    }
+
+    // 4) Eventos
+    selectCarpeta.addEventListener("change", e => {
+        filtroCarpeta = e.target.value;
+        aplicar();
+    });
+
+    botonesTipo.forEach(btn => {
+        btn.addEventListener("click", () => {
+            botonesTipo.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            filtroTipo = btn.dataset.type;
+            aplicar();
+        });
+    });
+}
+
+// Helper para evitar inyección en el <option>
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
