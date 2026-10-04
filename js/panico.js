@@ -19,8 +19,8 @@ import { mostrarToast } from "./notifications.js";
 // el texto "I allow callmebot to send me messages" por WhatsApp
 // al +34 644 51 95 23. Recibirá un APIKEY por respuesta.
 // Pegar ese APIKEY en la constante de abajo.
-const CALLMEBOT_PHONE  = "+51964125058";
-const CALLMEBOT_APIKEY = "TU_API_KEY_AQUI";
+const CALLMEBOT_PHONE  = "+51954125058";
+const CALLMEBOT_APIKEY = "9034887";
 
 // ------------------------------------------------------------
 // Estado interno
