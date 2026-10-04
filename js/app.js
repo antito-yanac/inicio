@@ -209,7 +209,6 @@ configurarBotonConsulta();
 //======================================================
 
 function inicializarFiltros(lugares, mapa) {
-
     const selectCarpeta = document.getElementById("folder-select");
     const botonesTipo   = document.querySelectorAll(".type-btn");
 
@@ -218,11 +217,10 @@ function inicializarFiltros(lugares, mapa) {
         return;
     }
     if (!mapa || typeof mapa.filtrarLugares !== "function") {
-        console.warn("app.js: mapa.filtrarLugares no está disponible");
+        console.warn("app.js: mapa.filtrarLugares no disponible");
         return;
     }
 
-    // 1) Poblar el select
     const carpetas = obtenerCarpetas(lugares);
     console.info(`app.js: ${carpetas.length} carpetas detectadas`, carpetas);
 
@@ -232,28 +230,22 @@ function inicializarFiltros(lugares, mapa) {
             `<option value="${escapeHtml(c)}">📁 ${escapeHtml(c)}</option>`
         ).join("");
 
-    // 2) Estado
     let filtroCarpeta = "__all__";
     let filtroTipo    = "all";
 
-    // 3) Aplicar filtros
     function aplicar() {
         const visibles = mapa.filtrarLugares(props => {
             const okCarpeta =
                 filtroCarpeta === "__all__" ||
                 (props.carpeta || "(Raíz)") === filtroCarpeta;
-
             const okTipo =
                 filtroTipo === "all" ||
                 props.tipo === filtroTipo;
-
             return okCarpeta && okTipo;
         });
-
-        stats.textContent = `${visibles} lugares visibles`;
+        document.getElementById("stats").textContent = `${visibles} lugares visibles`;
     }
 
-    // 4) Eventos
     selectCarpeta.addEventListener("change", e => {
         filtroCarpeta = e.target.value;
         aplicar();
@@ -267,7 +259,6 @@ function inicializarFiltros(lugares, mapa) {
             aplicar();
         });
     });
-
 }
 
 function escapeHtml(str) {
@@ -278,7 +269,6 @@ function escapeHtml(str) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
 }
-
 //======================================================
 
 iniciar();
