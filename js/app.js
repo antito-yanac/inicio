@@ -1,13 +1,9 @@
 //======================================================
 // Buscador Lugares Antamina 2026
 // Archivo principal
-//
-// v2: añade el cliente del scraper Keraunos (modo "index"),
-// que actúa como RESPALDO si admin.html no está abierto.
-// ======================================================
+//======================================================
 
-//import { cargarLugares } from "./data.js";
-import { cargarLugares, obtenerCarpetas } from "./data.js";
+import { cargarLugares, obtenerCarpetas } from "./data.js";   // ⬅️ CORREGIDO
 import { crearBuscador, teclado } from "./search.js";
 import { crearMapa } from "./map.js";
 import { inicializarFirebase } from "./notifications.js";
@@ -19,15 +15,15 @@ import { iniciarEstadoCliente } from "./estado-cliente.js";
 // Referencias HTML
 //======================================================
 
-const input = document.getElementById("search");
-const stats = document.getElementById("stats");
+const input   = document.getElementById("search");
+const stats   = document.getElementById("stats");
 const results = document.getElementById("results");
 
 //======================================================
 
 let lugares = [];
-let buscar = null;
-let mapa = null;
+let buscar  = null;
+let mapa    = null;
 
 //======================================================
 // Inicio
@@ -38,8 +34,6 @@ async function iniciar() {
     try {
 
         stats.textContent = "Cargando lugares...";
-        // Filtros de carpeta y tipo
-        inicializarFiltros(lugares, mapa);
 
         lugares = await cargarLugares();
 
@@ -51,18 +45,16 @@ async function iniciar() {
 
         stats.textContent = `${lugares.length} lugares cargados`;
 
+        // ⬅️ NUEVO: activar filtros de carpeta + tipo
+        inicializarFiltros(lugares, mapa);
+
         // Escuchar mensajes push en tiempo real (Firestore).
-        // Todos los navegadores con la página abierta reciben el
-        // mensaje real que el admin envíe desde admin.html.
         escucharMensajesPush();
 
-        // Habilitar Firebase Messaging de forma silenciosa (permiso +
-        // Service Worker + token). No muestra toasts de estado.
+        // Habilitar Firebase Messaging
         inicializarFirebase().catch(err => console.warn("Firebase:", err.message));
 
-        // Respaldo del cliente Keraunos: si admin.html NO está abierto,
-        // leemos estado.json nosotros mismos y mostramos las alertas
-        // directamente (sin pasar por Firestore).
+        // Respaldo del cliente Keraunos
         try {
             iniciarEstadoCliente({ modo: "index" });
         } catch (e) {
@@ -73,7 +65,7 @@ async function iniciar() {
 
         console.error(error);
 
-        stats.textContent = "Error cargando lugares.json";
+        stats.textContent = "Error cargando lugares";
 
     }
 
@@ -84,7 +76,6 @@ async function iniciar() {
 //======================================================
 
 input.addEventListener("input", buscarTexto);
-
 input.addEventListener("keydown", controlarTeclado);
 
 //======================================================
@@ -97,12 +88,7 @@ function buscarTexto() {
 
     cambiarColorFondo(texto);
 
-    buscar(
-        texto,
-        results,
-        mapa,
-        stats
-    );
+    buscar(texto, results, mapa, stats);
 
 }
 
@@ -111,9 +97,7 @@ function buscarTexto() {
 //======================================================
 
 function controlarTeclado(e) {
-
     teclado(e, mapa);
-
 }
 
 //======================================================
@@ -123,46 +107,32 @@ function controlarTeclado(e) {
 function cambiarColorFondo(texto) {
 
     if (texto.length === 0) {
-
         document.body.style.backgroundColor = "#2c3e50";
-
         return;
-
     }
 
     const tono = (texto.length * 18) % 360;
-
-    document.body.style.backgroundColor =
-        `hsl(${tono},45%,30%)`;
+    document.body.style.backgroundColor = `hsl(${tono},45%,30%)`;
 
 }
 
 //======================================================
 // Botón "Consultar alerta meteorológica"
-// Al presionar, consulta el estado actual de las alertas.
-// Si el admin ha emitido una alerta activa (dentro de los 15
-// minutos), la muestra. Si no hay alerta activa, muestra
-// "Libre de alertas" (verde por defecto).
 //======================================================
 
 function configurarBotonConsulta() {
 
     const btn = document.getElementById("btn-test-alerta");
-
     if (!btn) return;
 
     btn.addEventListener("click", () => {
-        // Consultar el estado actual: re-verificar Firestore
-        // al forzar una nueva carga inicial
         consultarEstadoAlerta();
     });
 
 }
 
-// Consulta el estado actual de las alertas desde Firestore
 async function consultarEstadoAlerta() {
     try {
-        // Importar Firestore dinámicamente
         const { getFirestore, collection, query, orderBy, limit, getDocs } =
             await import("https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js");
         const { obtenerApp } = await import("./firebase-app.js");
@@ -181,7 +151,6 @@ async function consultarEstadoAlerta() {
                 (data.nivel && data.nivel !== "normal" && data.nivel !== "vigilancia");
 
             if (esAlerta) {
-                // Verificar si está dentro de los 15 minutos
                 const timestampInicio = data.timestampInicio || null;
                 const fechaDoc = data.fecha?.toMillis?.() || null;
                 let tiempoRef = timestampInicio || fechaDoc;
@@ -189,10 +158,6 @@ async function consultarEstadoAlerta() {
                 if (tiempoRef) {
                     const transcurrido = Date.now() - tiempoRef;
                     if (transcurrido < DURACION_ALERTA_MS) {
-                        // Mostrar la alerta activa.
-                        // Se pasa el timestampInicio REAL y la duración completa
-                        // (15 min) para que el contador se sincronice entre todos
-                        // los navegadores y llegue a cero al mismo tiempo.
                         mostrarAlertaCompleta({
                             nivel:           data.nivel || "roja",
                             titulo:          data.titulo || "⚡ ALERTA DE TORMENTA ELÉCTRICA",
@@ -210,7 +175,6 @@ async function consultarEstadoAlerta() {
                         return;
                     }
                 } else {
-                    // Sin timestamp, mostrar la alerta igual (contador local)
                     mostrarAlertaCompleta({
                         nivel:           data.nivel || "roja",
                         titulo:          data.titulo || "⚡ ALERTA DE TORMENTA ELÉCTRICA",
@@ -230,12 +194,10 @@ async function consultarEstadoAlerta() {
             }
         }
 
-        // No hay alerta activa → mostrar "Libre de alertas"
         mostrarAlertaLibre();
 
     } catch (e) {
         console.warn("app.js: error consultando estado de alerta", e);
-        // En caso de error, mostrar "Libre de alertas" como fallback
         mostrarAlertaLibre();
     }
 }
@@ -243,32 +205,38 @@ async function consultarEstadoAlerta() {
 configurarBotonConsulta();
 
 //======================================================
-
-iniciar();
-// ======================================================
-// FILTROS: carpeta + tipo
-// ======================================================
+// ⬅️ NUEVO: Filtros de carpeta + tipo
+//======================================================
 
 function inicializarFiltros(lugares, mapa) {
 
     const selectCarpeta = document.getElementById("folder-select");
     const botonesTipo   = document.querySelectorAll(".type-btn");
 
-    if (!selectCarpeta) return;
+    if (!selectCarpeta) {
+        console.warn("app.js: no existe #folder-select");
+        return;
+    }
+    if (!mapa || typeof mapa.filtrarLugares !== "function") {
+        console.warn("app.js: mapa.filtrarLugares no está disponible");
+        return;
+    }
 
-    // 1) Poblar el select con las carpetas detectadas
+    // 1) Poblar el select
     const carpetas = obtenerCarpetas(lugares);
+    console.info(`app.js: ${carpetas.length} carpetas detectadas`, carpetas);
+
     selectCarpeta.innerHTML =
         `<option value="__all__">📁 Todas las carpetas</option>` +
         carpetas.map(c =>
             `<option value="${escapeHtml(c)}">📁 ${escapeHtml(c)}</option>`
         ).join("");
 
-    // 2) Estado de filtros
+    // 2) Estado
     let filtroCarpeta = "__all__";
     let filtroTipo    = "all";
 
-    // 3) Función que aplica ambos filtros al mapa
+    // 3) Aplicar filtros
     function aplicar() {
         const visibles = mapa.filtrarLugares(props => {
             const okCarpeta =
@@ -299,9 +267,9 @@ function inicializarFiltros(lugares, mapa) {
             aplicar();
         });
     });
+
 }
 
-// Helper para evitar inyección en el <option>
 function escapeHtml(str) {
     return String(str)
         .replace(/&/g, "&amp;")
@@ -310,3 +278,7 @@ function escapeHtml(str) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
 }
+
+//======================================================
+
+iniciar();
