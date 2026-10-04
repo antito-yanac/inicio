@@ -1,6 +1,6 @@
 /* ============================================================
    ANTAMINA · VIGILANCIA — style.css
-   Paleta clara (verde/blanco/gris) + filtros KML
+   Paleta clara (verde/blanco/gris) + filtros KML unificados
    ============================================================ */
 
 * {
@@ -322,107 +322,115 @@ body {
 }
 
 
-/* ==================================
-   FILTROS DE TIPO — botones minúsculos
-   Todo / Puntos / Polígonos / Rutas
-================================== */
+/* ============================================================
+   FILTROS UNIFICADOS — una sola barra horizontal
+   Contiene: botones de tipo + separador + select de carpeta
+   ============================================================ */
 
-.type-filter {
+.filter-bar {
     display: flex;
-    flex-wrap: nowrap;
-    gap: 3px;
-    width: 100%;
+    align-items: center;
+    gap: 4px;
+    width: 222px;
+    padding: 3px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.70);
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
     overflow-x: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    padding-bottom: 1px;
     -webkit-overflow-scrolling: touch;
 }
 
-.type-filter::-webkit-scrollbar {
+.filter-bar::-webkit-scrollbar {
     display: none;
 }
 
-.type-btn {
+/* Botones dentro de la barra */
+.filter-bar .type-filter {
+    display: flex;
+    gap: 2px;
     flex: 0 0 auto;
-    padding: 3px 7px;
-    border-radius: 10px;
-    border: 1px solid rgba(40,55,60,.10);
-    background: rgba(255,255,255,.86);
-    color: #405048;
-    font-size: 9px;
-    font-weight: 600;
-    font-family: inherit;
-    line-height: 1.05;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: background .15s, color .15s, border-color .15s;
-    box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
 
-.type-btn:hover {
-    background: rgba(241,246,243,.98);
-    border-color: rgba(22,136,68,.35);
+.filter-bar .type-btn {
+    flex: 0 0 auto;
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #65737b;
+    font-size: 9px;
+    font-weight: 700;
+    font-family: inherit;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+
+.filter-bar .type-btn:hover {
     color: #168844;
 }
 
-.type-btn.active {
+.filter-bar .type-btn.active {
     background: #168844;
     color: #fff;
-    border-color: #168844;
-    box-shadow: 0 2px 6px rgba(22,136,68,.30);
+    box-shadow: 0 1px 3px rgba(22,136,68,.30);
 }
 
+/* Separador visual entre botones y select */
+.filter-bar .divider {
+    flex: 0 0 auto;
+    width: 1px;
+    height: 14px;
+    background: rgba(40,55,60,.15);
+    margin: 0 2px;
+}
 
-/* ==================================
-   FILTRO DE CARPETA (select KML)
-================================== */
-
-.folder-filter {
-    width: 222px;
-    margin-top: 0;
+/* Select dentro de la barra */
+.filter-bar .folder-filter {
+    flex: 1 1 auto;
+    min-width: 80px;
     position: relative;
 }
 
-#folder-select {
+.filter-bar #folder-select {
     width: 100%;
-    height: 30px;
-    box-sizing: border-box;
-    padding: 0 26px 0 10px;
-    border-radius: 10px;
-    border: 1px solid rgba(40,55,60,.10);
-    background-color: rgba(255,255,255,.96);
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2365737b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    height: 22px;
+    padding: 0 18px 0 6px;
+    border: 0;
+    border-radius: 6px;
+    background-color: transparent;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%2365737b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
     background-repeat: no-repeat;
-    background-position: right 9px center;
+    background-position: right 4px center;
     color: #293940;
-    font-size: 10px;
+    font-size: 9px;
     font-family: inherit;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
     appearance: none;
     -webkit-appearance: none;
-    box-shadow: 0 2px 8px rgba(0,0,0,.10);
-    transition: border-color .15s, box-shadow .15s;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
 }
 
-#folder-select:hover {
-    border-color: rgba(22,136,68,.35);
+.filter-bar #folder-select:hover {
+    color: #168844;
 }
 
-#folder-select:focus {
+.filter-bar #folder-select:focus {
     outline: none;
-    border-color: #168844;
     box-shadow: 0 0 0 2px rgba(22,136,68,.20);
 }
 
-#folder-select option {
+.filter-bar #folder-select option {
     background: #fff;
     color: #293940;
     padding: 6px;
+    font-size: 12px;
 }
 
 
@@ -726,7 +734,7 @@ body {
     .left-ui,
     .search-box,
     #results,
-    .folder-filter {
+    .filter-bar {
 
         width: 195px;
     }
@@ -741,14 +749,14 @@ body {
         font-size: 8px;
     }
 
-    .type-btn {
-        padding: 3px 6px;
+    .filter-bar .type-btn {
+        padding: 3px 5px;
         font-size: 8px;
     }
 
-    #folder-select {
-        font-size: 9px;
-        height: 28px;
+    .filter-bar #folder-select {
+        font-size: 8px;
+        height: 20px;
     }
 }
 
@@ -791,10 +799,25 @@ body {
         margin-bottom: 130px;
     }
 
-    /* Los filtros nunca deben crecer más que el buscador */
-    .type-filter,
-    .folder-filter {
+    /* La barra de filtros no debe crecer más que el buscador */
+    .filter-bar {
         max-width: 100%;
+    }
+
+    /* Aún más compactos en móvil */
+    .filter-bar .type-btn {
+        padding: 3px 6px;
+        font-size: 8px;
+    }
+
+    .filter-bar #folder-select {
+        font-size: 8px;
+        height: 20px;
+        padding: 0 16px 0 5px;
+    }
+
+    .filter-bar .divider {
+        height: 12px;
     }
 }
 
