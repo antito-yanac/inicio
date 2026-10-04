@@ -345,7 +345,7 @@ async function enviarSolicitud() {
 // WhatsApp CallMeBot (background, no espera)
 // ------------------------------------------------------------
 function enviarWhatsApp(nombre, descripcion, lat, lng) {
-    if (CALLMEBOT_APIKEY === "TU_API_KEY_AQUI") {
+    if (CALLMEBOT_KEY === "9034887") {
         console.warn("panico: CallMeBot no configurado (falta APIKEY). Se omite WhatsApp.");
         return;
     }
