@@ -1,24 +1,25 @@
 // js/panico.js
 // ============================================================
-// Botón de pánico + modal + envío a Firestore + WhatsApp (v2)
+// Botón de pánico + modal + envío a Firestore + WhatsApp (v3)
 // ============================================================
-// v2 — Correcciones:
-//   - GPS robusto: intenta baja precisión primero (rápido),
-//     luego alta precisión si falla. Timeouts progresivos.
-//   - Al enviar: si no hay GPS, lo intenta capturar con spinner
-//     y timeout extendido (30s) antes de descartar.
-//   - Cierre garantizado del modal (éxito o error).
-//   - Timeout máximo de 12s para Firestore.
+// v3 — Correcciones:
+//   - Fix typo CALLMEBOT_APIKEY.
+//   - Autenticación anónima antes de escribir en Firestore.
+//   - Try/catch global en enviarSolicitud: SIEMPRE cierra el modal.
+//   - Timeout de Firestore para no colgar la UI.
 // ============================================================
 
 import { enviarMensajePush } from "./mensajes.js";
 import { mostrarToast } from "./notifications.js";
+import { getAuth, signInAnonymously }
+    from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
+import { obtenerApp } from "./firebase-app.js";
 
 // ------------------------------------------------------------
 // CONFIGURACIÓN WHATSAPP (CallMeBot)
 // ------------------------------------------------------------
-const CALLMEBOT_PHONE  = "+51954125058";
-const CALLMEBOT_APIKEY = "9034887";
+const CALLMEBOT_PHONE  = "+51964125058";
+const CALLMEBOT_APIKEY = "TU_API_KEY_AQUI";   // ← pega tu API key aquí
 
 // ------------------------------------------------------------
 // Estado interno
@@ -30,14 +31,22 @@ let modalAbierto = false;
 let enviando = false;
 
 // ------------------------------------------------------------
-// Captura GPS robusta
+// Sesión anónima
+// ------------------------------------------------------------
+async function asegurarSesion() {
+    const auth = getAuth(obtenerApp());
+    if (auth.currentUser) return auth.currentUser;
+    const cred = await signInAnonymously(auth);
+    console.log("panico: sesión anónima creada:", cred.user.uid);
+    return cred.user;
+}
+
+// ------------------------------------------------------------
+// Captura GPS
 // ------------------------------------------------------------
 function obtenerUbicacionUna(timeoutMs, altaPrecision) {
     return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject(new Error("no-soportado"));
-            return;
-        }
+        if (!navigator.geolocation) return reject(new Error("no-soportado"));
         navigator.geolocation.getCurrentPosition(
             (pos) => resolve({
                 lat: pos.coords.latitude,
@@ -45,48 +54,37 @@ function obtenerUbicacionUna(timeoutMs, altaPrecision) {
                 accuracy: pos.coords.accuracy
             }),
             (err) => reject(err),
-            {
-                enableHighAccuracy: altaPrecision,
-                timeout: timeoutMs,
-                maximumAge: 30000 // aceptar posiciones de hasta 30s
-            }
+            { enableHighAccuracy: altaPrecision, timeout: timeoutMs, maximumAge: 30000 }
         );
     });
 }
 
-// Inicia captura completa: baja precisión primero (rápida),
-// luego alta precisión como refinamiento.
 async function iniciarGPS() {
     gpsActual = null;
     gpsError = null;
     actualizarTextoGPS();
 
-    // 1. Intento rápido con red/WiFi (baja precisión, sin GPS)
     try {
         gpsActual = await obtenerUbicacionUna(8000, false);
         actualizarTextoGPS();
     } catch (e) {
-        console.warn("panico: GPS baja precisión falló", e.message || e.code);
+        console.warn("panico: GPS rápido falló", e.message || e.code);
     }
 
-    // 2. Refinamiento con GPS real (alta precisión) en background
     obtenerUbicacionUna(25000, true)
         .then((pos) => {
-            // Solo sobreescribir si mejora la precisión
             if (!gpsActual || pos.accuracy < (gpsActual.accuracy || 99999)) {
                 gpsActual = pos;
                 actualizarTextoGPS();
             }
         })
         .catch((e) => {
-            // Si ya teníamos algo, mantenerlo. Si no, dejar el error.
             if (!gpsActual) {
                 gpsError = traducirErrorGPS(e);
                 actualizarTextoGPS();
             }
         });
 
-    // 3. Watch continuo para refinar en movimiento
     if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     watchId = navigator.geolocation.watchPosition(
         (pos) => {
@@ -107,8 +105,8 @@ function traducirErrorGPS(err) {
     if (!err) return "Error desconocido";
     switch (err.code) {
         case 1: return "Permiso de ubicación denegado";
-        case 2: return "Ubicación no disponible. Verifica que el GPS esté encendido";
-        case 3: return "Tiempo de espera agotado. Intenta de nuevo";
+        case 2: return "Ubicación no disponible. Verifica el GPS";
+        case 3: return "Tiempo de espera agotado";
         default: return err.message || "Error desconocido";
     }
 }
@@ -141,12 +139,11 @@ function detenerGPS() {
 }
 
 // ------------------------------------------------------------
-// HTML del botón + modal
+// HTML
 // ------------------------------------------------------------
 function inyectarEstructura() {
     if (document.getElementById("btn-panico")) return;
 
-    // Botón flotante
     const btn = document.createElement("button");
     btn.id = "btn-panico";
     btn.title = "Solicitar ayuda";
@@ -160,35 +157,29 @@ function inyectarEstructura() {
         document.body.appendChild(btn);
     }
 
-    // Modal
     const modalHtml = `
     <div id="panico-overlay" class="panico-overlay">
         <div class="panico-modal">
             <button class="panico-cerrar" id="panico-btn-cerrar" aria-label="Cerrar">×</button>
             <h2 class="panico-titulo">🆘 Solicitar ayuda</h2>
             <p class="panico-subtitulo">Completa los datos. Tu ubicación se capturará automáticamente.</p>
-
             <div class="panico-campo">
                 <label for="panico-nombre">Nombre</label>
                 <input type="text" id="panico-nombre" placeholder="Tu nombre (opcional)"
                        maxlength="60" autocomplete="off">
             </div>
-
             <div class="panico-campo">
                 <label for="panico-descripcion">Descripción (opcional)</label>
                 <textarea id="panico-descripcion" placeholder="Describe brevemente tu situación..."
                           maxlength="300" rows="3"></textarea>
             </div>
-
             <div class="panico-gps" id="panico-gps">
                 <span class="panico-gps-icono">📍</span>
                 <span class="panico-gps-texto" id="panico-gps-texto">Capturando ubicación...</span>
             </div>
-
             <button class="panico-btn-enviar" id="panico-btn-enviar">
                 🆘 ENVIAR SOLICITUD
             </button>
-
             <p class="panico-nota">Tu solicitud será atendida por el equipo de vigilancia.</p>
         </div>
     </div>`;
@@ -197,7 +188,6 @@ function inyectarEstructura() {
     cont.innerHTML = modalHtml;
     document.body.appendChild(cont.firstElementChild);
 
-    // Eventos
     btn.addEventListener("click", abrirModal);
     document.getElementById("panico-btn-cerrar").addEventListener("click", cerrarModal);
     document.getElementById("panico-overlay").addEventListener("click", (e) => {
@@ -210,16 +200,11 @@ function inyectarEstructura() {
     });
 }
 
-// ------------------------------------------------------------
-// Abrir / cerrar modal
-// ------------------------------------------------------------
 function abrirModal() {
     inyectarEstructura();
-    const overlay = document.getElementById("panico-overlay");
-    overlay.classList.add("panico-visible");
+    document.getElementById("panico-overlay").classList.add("panico-visible");
     modalAbierto = true;
     document.getElementById("panico-nombre").focus();
-    // Resetear el botón de enviar por si acaso
     const btn = document.getElementById("panico-btn-enviar");
     btn.disabled = false;
     btn.innerHTML = "🆘 ENVIAR SOLICITUD";
@@ -234,118 +219,121 @@ function cerrarModal() {
 }
 
 // ------------------------------------------------------------
-// Enviar solicitud
+// Enviar solicitud — con try/catch global, SIEMPRE cierra el modal
 // ------------------------------------------------------------
 async function enviarSolicitud() {
     if (enviando) return;
+    enviando = true;
+
+    const btn = document.getElementById("panico-btn-enviar");
+    btn.disabled = true;
+    btn.innerHTML = "⏳ Enviando...";
 
     const nombre = (document.getElementById("panico-nombre").value || "").trim();
     const descripcion = (document.getElementById("panico-descripcion").value || "").trim();
 
-    const btn = document.getElementById("panico-btn-enviar");
-
-    // Si no hay ubicación todavía, intentar capturarla con spinner
-    if (!gpsActual) {
-        enviando = true;
-        btn.disabled = true;
-        btn.innerHTML = "⏳ Obteniendo ubicación...";
-
-        try {
-            gpsActual = await obtenerUbicacionUna(30000, false);
-            actualizarTextoGPS();
-        } catch (e) {
-            // Reintentar con alta precisión
+    try {
+        // 1. Ubicación (si no la tenemos, intentar capturar)
+        if (!gpsActual) {
+            btn.innerHTML = "⏳ Obteniendo ubicación...";
             try {
-                gpsActual = await obtenerUbicacionUna(20000, true);
+                gpsActual = await obtenerUbicacionUna(30000, false);
                 actualizarTextoGPS();
-            } catch (e2) {
-                gpsError = traducirErrorGPS(e2);
-                actualizarTextoGPS();
-                mostrarToast(
-                    "📍 Falta ubicación",
-                    "No se pudo capturar tu ubicación. Verifica que el GPS esté activado y da permisos al navegador.",
-                    "alerta",
-                    true
-                );
-                enviando = false;
-                btn.disabled = false;
-                btn.innerHTML = "🆘 ENVIAR SOLICITUD";
-                return;
+            } catch (e) {
+                try {
+                    gpsActual = await obtenerUbicacionUna(20000, true);
+                    actualizarTextoGPS();
+                } catch (e2) {
+                    gpsError = traducirErrorGPS(e2);
+                    actualizarTextoGPS();
+                    mostrarToast("📍 Falta ubicación",
+                        "No se pudo capturar tu ubicación. Verifica el GPS y los permisos.",
+                        "alerta", true);
+                    return; // el finally cierra el modal
+                }
             }
         }
-    }
 
-    // Ya tenemos ubicación: enviar
-    enviando = true;
-    btn.disabled = true;
-    btn.innerHTML = "⏳ Enviando...";
+        // 2. Sesión anónima
+        btn.innerHTML = "⏳ Conectando...";
+        try {
+            await asegurarSesion();
+        } catch (e) {
+            console.error("panico: error auth anónima", e);
+            mostrarToast("⚠️ Error de conexión",
+                "No se pudo conectar con el servidor. Intenta de nuevo.",
+                "alerta", true);
+            return; // el finally cierra el modal
+        }
 
-    const hora = new Date().toISOString();
-    const datosPanico = {
-        tipo:        "panico",
-        nombre:      nombre,
-        descripcion: descripcion,
-        lat:         gpsActual.lat,
-        lng:         gpsActual.lng,
-        accuracy:    gpsActual.accuracy || null,
-        fecha:       hora,
-        atendido:    false
-    };
+        // 3. Enviar a Firestore con timeout
+        btn.innerHTML = "⏳ Enviando...";
+        let okFirestore = false;
+        try {
+            const envioPromise = enviarMensajePush(
+                "🆘 Solicitud de ayuda",
+                `Ubicación: ${gpsActual.lat.toFixed(6)}, ${gpsActual.lng.toFixed(6)}` +
+                (nombre ? ` | ${nombre}` : "") +
+                (descripcion ? ` | ${descripcion}` : ""),
+                {
+                    tipo:        "panico",
+                    nombre:      nombre,
+                    descripcion: descripcion,
+                    lat:         gpsActual.lat,
+                    lng:         gpsActual.lng,
+                    accuracy:    gpsActual.accuracy || null,
+                    fecha:       new Date().toISOString(),
+                    atendido:    false
+                }
+            );
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("timeout-firestore")), 12000)
+            );
+            await Promise.race([envioPromise, timeoutPromise]);
+            okFirestore = true;
+        } catch (e) {
+            console.error("panico: error Firestore", e);
+        }
 
-    // 1. Firestore con timeout de 12s
-    let okFirestore = false;
-    try {
-        const envioPromise = enviarMensajePush(
-            "🆘 Solicitud de ayuda",
-            `Ubicación: ${gpsActual.lat.toFixed(6)}, ${gpsActual.lng.toFixed(6)}` +
-            (nombre ? ` | ${nombre}` : "") +
-            (descripcion ? ` | ${descripcion}` : ""),
-            datosPanico
-        );
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("timeout-firestore")), 12000)
-        );
-        await Promise.race([envioPromise, timeoutPromise]);
-        okFirestore = true;
+        // 4. WhatsApp en background (silencioso, sin await)
+        try {
+            enviarWhatsApp(nombre, descripcion, gpsActual.lat, gpsActual.lng);
+        } catch (e) {
+            console.warn("panico: WhatsApp falló", e);
+        }
+
+        // 5. Feedback
+        if (okFirestore) {
+            mostrarToast("🆘 Solicitud enviada",
+                "Vigilancia ha sido notificada.", "exito", true);
+        } else {
+            mostrarToast("⚠️ Envío parcial",
+                "Se intentó notificar a vigilancia. Si es urgente, llama al 911.",
+                "alerta", true);
+        }
+
+        // Limpiar campos
+        document.getElementById("panico-nombre").value = "";
+        document.getElementById("panico-descripcion").value = "";
+
     } catch (e) {
-        console.error("panico: error Firestore", e);
+        // Cualquier error inesperado: log y toast
+        console.error("panico: error inesperado", e);
+        mostrarToast("⚠️ Error", "Ocurrió un problema. Intenta de nuevo.", "alerta", true);
+    } finally {
+        // SIEMPRE cerrar modal y resetear botón
+        enviando = false;
+        btn.disabled = false;
+        btn.innerHTML = "🆘 ENVIAR SOLICITUD";
+        cerrarModal();
     }
-
-    // 2. WhatsApp en background (no espera)
-    enviarWhatsApp(nombre, descripcion, gpsActual.lat, gpsActual.lng);
-
-    // 3. Feedback y CIERRE GARANTIZADO
-    if (okFirestore) {
-        mostrarToast("🆘 Solicitud enviada", "Vigilancia ha sido notificada.", "exito", true);
-    } else {
-        // Aun si Firestore falló, WhatsApp pudo haber salido.
-        // Cerrar igual y avisar.
-        mostrarToast(
-            "⚠️ Envío parcial",
-            "Se intentó notificar a vigilancia. Si es urgente, llama al 911.",
-            "alerta",
-            true
-        );
-    }
-
-    // Limpiar campos
-    document.getElementById("panico-nombre").value = "";
-    document.getElementById("panico-descripcion").value = "";
-
-    // Cerrar SIEMPRE el modal
-    cerrarModal();
-
-    // Resetear estado del botón (por si el modal se vuelve a abrir)
-    enviando = false;
-    btn.disabled = false;
-    btn.innerHTML = "🆘 ENVIAR SOLICITUD";
 }
 
 // ------------------------------------------------------------
-// WhatsApp CallMeBot (background, no espera)
+// WhatsApp CallMeBot (usa CALLMEBOT_APIKEY, no CALLMEBOT_KEY)
 // ------------------------------------------------------------
 function enviarWhatsApp(nombre, descripcion, lat, lng) {
-    if (CALLMEBOT_KEY === "9034887") {
+    if (!CALLMEBOT_APIKEY || CALLMEBOT_APIKEY === "TU_API_KEY_AQUI") {
         console.warn("panico: CallMeBot no configurado (falta APIKEY). Se omite WhatsApp.");
         return;
     }
@@ -353,7 +341,7 @@ function enviarWhatsApp(nombre, descripcion, lat, lng) {
     const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
     const hora = new Date().toLocaleString("es-PE");
 
-    const lineas = [
+    const texto = [
         "🚨 SOLICITUD DE AYUDA 🚨",
         "",
         `👤 Nombre: ${nombre || "(no indicado)"}`,
@@ -362,9 +350,8 @@ function enviarWhatsApp(nombre, descripcion, lat, lng) {
         `📍 Ubicación: ${mapsUrl}`,
         `🌐 Coordenadas: ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
         `🕒 Hora: ${hora}`
-    ];
+    ].join("\n");
 
-    const texto = lineas.join("\n");
     const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(CALLMEBOT_PHONE)}&text=${encodeURIComponent(texto)}&apikey=${encodeURIComponent(CALLMEBOT_APIKEY)}`;
 
     fetch(url, { mode: "no-cors" })
