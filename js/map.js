@@ -1,7 +1,7 @@
 // js/map.js
 // ============================================================
 //  Mapa Leaflet — Antamina
-//  v5: zoom bottomright + filtrarLugares + carga robusta
+//  v6: listener de ubicación robusto (click + touchend)
 // ============================================================
 
 let map;
@@ -232,7 +232,6 @@ export async function iluminarDistritoZona(nombreZona, nivelKey = "roja") {
 // ======================================================
 export function crearMapa(idDiv) {
 
-    // Zoom en bottomright
     map = L.map(idDiv, { zoomControl: false });
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
@@ -258,12 +257,47 @@ export function crearMapa(idDiv) {
 
     map.setView([-9.50, -77.00], 9);
 
-    const btnUbicacion = document.getElementById("btn-ubicacion");
-    if (btnUbicacion) {
-        btnUbicacion.addEventListener("click", mostrarMiUbicacion);
-    }
+    // 👇 Listener robusto para el botón de ubicación
+    engancharBotonUbicacion();
 
     return { cargarGeoJSON, irA, limpiarSeleccion, filtrarLugares };
+}
+
+
+// ======================================================
+// ENGANCHE ROBUSTO DEL BOTÓN DE UBICACIÓN
+// ======================================================
+function engancharBotonUbicacion() {
+    const btnUbicacion = document.getElementById("btn-ubicacion");
+
+    if (!btnUbicacion) {
+        console.warn("map.js: #btn-ubicacion aún no existe, reintentando...");
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", engancharBotonUbicacion);
+        } else {
+            setTimeout(engancharBotonUbicacion, 150);
+        }
+        return;
+    }
+
+    if (btnUbicacion.dataset.listener === "1") return;
+
+    // Click normal
+    btnUbicacion.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        mostrarMiUbicacion();
+    });
+
+    // Respaldo para móviles que no disparan click en SVG
+    btnUbicacion.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        mostrarMiUbicacion();
+    }, { passive: false });
+
+    btnUbicacion.dataset.listener = "1";
+    console.info("map.js: listener de ubicación enganchado ✅");
 }
 
 
@@ -272,22 +306,33 @@ export function crearMapa(idDiv) {
 // ======================================================
 function mostrarMiUbicacion() {
 
+    console.log("📍 mostrarMiUbicacion() ejecutado");
+
     const btn = document.getElementById("btn-ubicacion");
+
     if (!navigator.geolocation) {
         alert("Tu navegador no soporta geolocalización.");
         return;
     }
 
-    btn.classList.add("buscar");
-    const options = { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 };
+    if (btn) btn.classList.add("buscar");
+
+    // 👇 Opciones más tolerantes para móvil
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 20000,        // 20s en vez de 15s
+        maximumAge: 30000      // aceptar posición cacheada de hasta 30s
+    };
 
     navigator.geolocation.getCurrentPosition(
         (pos) => {
-            btn.classList.remove("buscar");
+            if (btn) btn.classList.remove("buscar");
 
             const lat = pos.coords.latitude;
             const lng = pos.coords.longitude;
             const accuracy = pos.coords.accuracy;
+
+            console.log("📍 Ubicación obtenida:", lat, lng, "±", accuracy, "m");
 
             if (markerUbicacion) map.removeLayer(markerUbicacion);
             if (circleAccuracy) map.removeLayer(circleAccuracy);
@@ -306,7 +351,7 @@ function mostrarMiUbicacion() {
                 `Lat: ${lat.toFixed(6)}<br>` +
                 `Lng: ${lng.toFixed(6)}<br>` +
                 `Precisión: ±${Math.round(accuracy)} m`
-            );
+            ).openPopup();
 
             let zoomLevel = 16;
             if (accuracy > 100) zoomLevel = 14;
@@ -330,12 +375,15 @@ function mostrarMiUbicacion() {
             );
         },
         (error) => {
-            btn.classList.remove("buscar");
+            if (btn) btn.classList.remove("buscar");
+
+            console.warn("📍 Error geolocalización:", error.code, error.message);
+
             let mensaje = "No se pudo obtener tu ubicación.\n\n";
             switch (error.code) {
-                case error.PERMISSION_DENIED:    mensaje += "⛔ Permiso denegado."; break;
-                case error.POSITION_UNAVAILABLE: mensaje += "📡 Posición no disponible."; break;
-                case error.TIMEOUT:              mensaje += "⏱️ Tiempo agotado."; break;
+                case error.PERMISSION_DENIED:    mensaje += "⛔ Permiso denegado.\nRevisa la configuración del navegador."; break;
+                case error.POSITION_UNAVAILABLE: mensaje += "📡 Posición no disponible.\nIntenta cerca de una ventana o activa el GPS."; break;
+                case error.TIMEOUT:              mensaje += "⏱️ Tiempo agotado.\nActiva el GPS de alta precisión."; break;
                 default:                         mensaje += "Error desconocido: " + error.message;
             }
             alert(mensaje);
@@ -346,10 +394,9 @@ function mostrarMiUbicacion() {
 
 
 // ======================================================
-// CARGAR GEOJSON (blindado)
+// CARGAR GEOJSON
 // ======================================================
 function cargarGeoJSON(lugares) {
-
     if (geoLayer) {
         try { geoLayer.remove(); } catch (e) {}
         geoLayer = null;
