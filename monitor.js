@@ -1,5 +1,5 @@
 // ============================================================
-//  Monitor Keraunos — Scraper (v7)
+//  Monitor Keraunos — Scraper (v8)
 //  ------------------------------------------------------------
 //  Responsabilidad ÚNICA:
 //    1. Scrapear Keraunos cada INTERVALO ms.
@@ -7,12 +7,19 @@
 //    3. Escribir estado.json con `sectores[]` + `alertas[]`.
 //    4. git push a GitHub Pages.
 //
-//  FIX v7:
-//    - Eliminado "git stash --include-untracked" (era el culpable
-//      de que estado.json desapareciera del working tree y de que
-//      se acumularan 14 stashes).
+//  FIX v8 (sobre v7):
+//    - FIX LOOKUP DE ZONA: antes se hacía CONFIG.MAPA_ZONAS[s.nombre]
+//      con el nombre COMPLETO de la tarjeta ("Campamento Yanacancha -
+//      (Nuevo Campamento, ...)"), pero MAPA_ZONAS usa claves CORTAS
+//      ("Campamento Yanacancha"). El lookup devolvía undefined y todas
+//      las alertas se descartaban con "continue" -> alertas[] siempre
+//      vacío. Ahora se usa coincidencia PARCIAL (buscarZona), igual
+//      que ya se hace con SECTORES_ESPERADOS.
+//
+//  FIX v7 (mantenido):
+//    - Eliminado "git stash --include-untracked".
 //    - Solo se usa "git pull --rebase --autostash".
-//    - "git add -f" para forzar el add incluso si algo lo ignora.
+//    - "git add -f" para forzar el add.
 // ============================================================
 
 const { exec } = require('child_process');
@@ -41,6 +48,13 @@ function registrarLog(mensaje) {
     const logLinea = `[${timestamp}] ${mensaje}\n`;
     console.log(logLinea.trim());
     try { fs.appendFileSync(ARCHIVO_LOG, logLinea, 'utf-8'); } catch (e) {}
+}
+
+// ------------------------------------------------------------
+//  Normaliza un texto para comparar (minúsculas, espacios simples)
+// ------------------------------------------------------------
+function normalizar(texto) {
+    return (texto || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 // ------------------------------------------------------------
@@ -94,8 +108,19 @@ function extraerHorasDeTarjeta($, el) {
     return { inicio, fin };
 }
 
-function normalizar(texto) {
-    return (texto || "").toLowerCase().replace(/\s+/g, " ").trim();
+// ------------------------------------------------------------
+//  FIX v8: busca la zona por COINCIDENCIA PARCIAL del nombre.
+//  El nombre de la tarjeta es largo ("Campamento Yanacancha - (...)")
+//  y las claves de MAPA_ZONAS son cortas ("Campamento Yanacancha").
+// ------------------------------------------------------------
+function buscarZona(nombre) {
+    const norm = normalizar(nombre);
+    for (const clave of Object.keys(CONFIG.MAPA_ZONAS)) {
+        if (norm.includes(normalizar(clave))) {
+            return CONFIG.MAPA_ZONAS[clave];
+        }
+    }
+    return null;
 }
 
 // ------------------------------------------------------------
@@ -226,8 +251,13 @@ function guardarJSON(estadoGlobal, sectores) {
 
     for (const s of sectores) {
         if (s.nivel === "VERDE") continue;
-        const zona = CONFIG.MAPA_ZONAS[s.nombre];
-        if (!zona) continue;
+
+        // FIX v8: coincidencia parcial en lugar de CONFIG.MAPA_ZONAS[s.nombre]
+        const zona = buscarZona(s.nombre);
+        if (!zona) {
+            registrarLog(`Aviso: sector sin zona mapeada, se omite alerta -> ${s.nombre}`);
+            continue;
+        }
 
         const coords = CONFIG.COORDENADAS_ZONAS[zona] || {};
         const { duracionMin, timestampInicio } = calcularDuracion(s);
@@ -349,6 +379,7 @@ module.exports = {
     consultarKeraunos,
     detectarNivelDeTarjeta,
     extraerHorasDeTarjeta,
+    buscarZona,
     guardarJSON,
     calcularDuracion,
     procesarResultado,
@@ -358,3 +389,4 @@ module.exports = {
 if (require.main === module) {
     cicloPrincipal();
 }
+

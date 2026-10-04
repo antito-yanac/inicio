@@ -5,7 +5,14 @@
 
 module.exports = {
 
-    URL: "https://antito-yanac.github.io/antito-yanac-test/",
+    // --------------------------------------------------------
+    //  FIX: la URL debe ser la FUENTE REAL de Keraunos.
+    //  Antes apuntaba a "https://antito-yanac.github.io/antito-yanac-test/"
+    //  que es la SALIDA del propio scraper (referencia circular):
+    //  esa página usa .sector-box, pero el scraper busca
+    //  .card.card-activo -> 0 coincidencias -> todo salía VERDE.
+    // --------------------------------------------------------
+    URL: "https://qr.keraunos.co/t/mHMsMSjw7fLzlVFzMsh9K99cFG7tiC",
 
     ARCHIVO_JSON: "estado.json",
     ARCHIVO_LOG:  "monitor.log",
@@ -23,6 +30,8 @@ module.exports = {
 
     INCLUIR_SECTORES_EXTRA: false,
 
+    // Claves CORTAS. El scraper las busca por coincidencia parcial
+    // dentro del nombre completo de cada tarjeta (ver buscarZona()).
     MAPA_ZONAS: {
         "Campamento Yanacancha": "Zona 1 - Campamentos",
         "Oficinas Mina":         "Zona 2 - Botadero Este",
@@ -39,3 +48,4 @@ module.exports = {
 
     DURACION_DEFAULT_MIN: 15
 };
+
