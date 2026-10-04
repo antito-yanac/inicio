@@ -278,7 +278,7 @@ export function crearMapa(idDiv) {
         btnUbicacion.addEventListener("click", mostrarMiUbicacion);
     }
 
-    return { cargarGeoJSON, irA, limpiarSeleccion };
+    return { cargarGeoJSON, irA, limpiarSeleccion, filtrarLugares };
 }
 
 // ======================================================
