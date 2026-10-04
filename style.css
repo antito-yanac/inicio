@@ -316,6 +316,112 @@ body {
     display: none;
 }
 
+
+/* ==================================
+   FILTROS DE TIPO (Todo / Puntos / Polígonos / Rutas)
+   ── Una sola línea, scroll horizontal si no caben ──
+================================== */
+
+.type-filter {
+    display: flex;
+    flex-wrap: nowrap;          /* una sola línea */
+    gap: 4px;
+    width: 100%;
+    overflow-x: auto;           /* scroll horizontal si no caben */
+    scrollbar-width: none;      /* Firefox */
+    -ms-overflow-style: none;   /* Edge/IE */
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.type-filter::-webkit-scrollbar {
+    display: none;              /* Chrome/Safari */
+}
+
+.type-btn {
+    flex: 0 0 auto;             /* no encoger */
+    padding: 5px 9px;
+    border-radius: 12px;
+    border: 1px solid rgba(40,55,60,.10);
+    background: rgba(255,255,255,.86);
+    color: #405048;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: inherit;
+    line-height: 1.1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+
+.type-btn:hover {
+    background: rgba(241,246,243,.98);
+    border-color: rgba(22,136,68,.35);
+    color: #168844;
+}
+
+.type-btn.active {
+    background: #168844;
+    color: #fff;
+    border-color: #168844;
+    box-shadow: 0 2px 8px rgba(22,136,68,.30);
+}
+
+
+/* ==================================
+   FILTRO DE CARPETA (select KML)
+   ── Mismo ancho que .search-box, paleta clara ──
+================================== */
+
+.folder-filter {
+    width: 222px;
+    margin-top: 0;
+    position: relative;
+}
+
+#folder-select {
+    width: 100%;
+    height: 36px;
+    box-sizing: border-box;
+    padding: 0 30px 0 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(40,55,60,.10);
+    background-color: rgba(255,255,255,.96);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2365737b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    color: #293940;
+    font-size: 11px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,.10);
+    transition: border-color .15s, box-shadow .15s;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+#folder-select:hover {
+    border-color: rgba(22,136,68,.35);
+}
+
+#folder-select:focus {
+    outline: none;
+    border-color: #168844;
+    box-shadow: 0 0 0 2px rgba(22,136,68,.20);
+}
+
+#folder-select option {
+    background: #fff;
+    color: #293940;
+    padding: 8px;
+}
+
+
 /* ==================================
    TARJETA INFERIOR (INFO-PANEL COMPACTO)
 ================================== */
@@ -335,7 +441,7 @@ body {
             6px
         );
 
-    width: 160px; /* Tamaño reducido */
+    width: 160px;
 
     padding: 6px 8px;
 
@@ -371,7 +477,6 @@ body {
     margin-bottom: 2px;
 }
 
-/* Ocultar el texto 'Libre de alertas' dentro del info-panel */
 .info .vigilance-title {
     display: none !important;
 }
@@ -411,14 +516,12 @@ body {
     gap: 4px;
 }
 
-/* Oculta altitud, tipo y copiar coordenadas si están dentro de la lista */
 .vigilance-line.altitud,
 .vigilance-line.tipo,
 .btn-copiar-coordenadas {
     display: none !important;
 }
 
-/* Estilo para el botón restante (Google Earth) */
 .info button:not(.btn-copiar-coordenadas) {
     margin-top: 4px;
     padding: 3px 6px;
@@ -431,10 +534,6 @@ body {
     align-items: center;
     gap: 3px;
 }
-
-
-/* mantenemos botón real para alertas,
-   pero no ocupa espacio visual */
 
 .hidden-alert-trigger {
 
@@ -497,66 +596,18 @@ body {
     z-index: 600;
 }
 
+/* El zoom ahora va abajo a la derecha (ver map.js) */
+.leaflet-bottom.leaflet-right {
+    margin-bottom: 8px;
+    margin-right: 8px;
+}
 
+/* Mantén el zoom top-left despejado por si algún día lo vuelves a poner */
 .leaflet-top.leaflet-left {
-
     top: 105px;
 }
 
 
-/* ==================================
-   RESPONSIVE
-================================== */
-
-@media(max-width:370px) {
-
-    .left-ui,
-    .search-box,
-    #results {
-
-        width: 195px;
-    }
-
-
-    .brand-subtitle {
-
-        display: none;
-    }
-
-    .top-bar-right {
-        width: 40%;
-        padding: 0 8px;
-        font-size: 8px;
-    }
-
-}
-
-
-@media(min-width:700px) {
-
-    .top-ui {
-
-        left: 18px;
-        right: 18px;
-        top: 18px;
-    }
-
-
-    .info {
-        left: 18px;
-        right: auto;
-
-        bottom: 35px;
-
-        width: 160px;
-    }
-
-    #btn-ubicacion {
-
-        right: 18px;
-    }
-
-}
 /* ==================================
    SUGERENCIAS DEL BUSCADOR
 ================================== */
@@ -658,73 +709,85 @@ body {
 
     font-weight: 850;
 }
-/* ============================================================
-   Filtros de tipo y carpeta
-   ============================================================ */
 
-.type-filter {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-    flex-wrap: wrap;
+
+/* ==================================
+   RESPONSIVE
+================================== */
+
+@media(max-width:370px) {
+
+    .left-ui,
+    .search-box,
+    #results,
+    .folder-filter {
+
+        width: 195px;
+    }
+
+    .brand-subtitle {
+        display: none;
+    }
+
+    .top-bar-right {
+        width: 40%;
+        padding: 0 8px;
+        font-size: 8px;
+    }
+
+    .type-btn {
+        padding: 4px 7px;
+        font-size: 9px;
+    }
+
+    #folder-select {
+        font-size: 10px;
+        height: 34px;
+    }
 }
 
-.type-btn {
-    padding: 6px 14px;
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.15);
-    background: transparent;
-    color: #cfd6e1;
-    cursor: pointer;
-    font-size: 13px;
-    font-family: inherit;
-    transition: all .15s ease;
-    white-space: nowrap;
+
+@media(min-width:700px) {
+
+    .top-ui {
+
+        left: 18px;
+        right: 18px;
+        top: 18px;
+    }
+
+
+    .info {
+        left: 18px;
+        right: auto;
+
+        bottom: 35px;
+
+        width: 160px;
+    }
+
+    #btn-ubicacion {
+
+        right: 18px;
+    }
 }
 
-.type-btn.active,
-.type-btn:hover {
-    background: #4285f4;
-    color: #fff;
-    border-color: #4285f4;
-}
 
-.folder-filter {
-    margin-top: 10px;
-    width: 100%;
-    position: relative;
-}
+/* ==================================
+   RESPONSIVE MÓVIL — evita tapar el mapa
+================================== */
 
-#folder-select {
-    width: 100%;
-    padding: 10px 38px 10px 14px;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.15);
-    background-color: #1e2530;
-    color: #fff;
-    font-size: 14px;
-    font-family: inherit;
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
-    background-repeat: no-repeat;
-    background-position: right 14px center;
-    transition: border-color .15s, background-color .15s;
-}
+@media (max-width: 600px) {
 
-#folder-select:hover {
-    border-color: rgba(66,133,244,0.6);
-}
+    /* El zoom de Leaflet en bottomright se sube para no chocar
+       con el botón de ubicación ni el footer */
+    .leaflet-bottom.leaflet-right {
+        margin-bottom: 130px;
+    }
 
-#folder-select:focus {
-    outline: none;
-    border-color: #4285f4;
-    box-shadow: 0 0 0 2px rgba(66,133,244,0.25);
-}
-
-#folder-select option {
-    background: #1e2530;
-    color: #fff;
-    padding: 8px;
+    /* Los filtros nunca deben crecer más que el buscador */
+    .type-filter,
+    .folder-filter {
+        max-width: 100%;
+    }
 }
