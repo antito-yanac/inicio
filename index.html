@@ -92,9 +92,10 @@ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
             <!-- RESULTADOS DEL BUSCADOR -->
             <div id="results"></div>
 
-            <div id="stats" >
+            <div id="stats">
                 Cargando lugares...
             </div>
+
             <!-- FILTROS: tipo de geometría -->
             <div class="type-filter" id="type-filter">
                 <button class="type-btn active" data-type="all">Todo</button>
@@ -172,17 +173,26 @@ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </div>
 
 
+<!-- =========================================================
+     LIBRERÍAS EXTERNAS (deben cargar ANTES de js/app.js)
+     ========================================================= -->
+
+<!-- Fuse.js: buscador difuso -->
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
 
+<!-- Leaflet: mapa -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<script type="module" src="js/app.js"></script>
-
-<!-- JSZip para abrir archivos .kmz -->
+<!-- JSZip: para abrir .kmz (opcional, si lo usas) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-<!-- togeojson para convertir KML a GeoJSON -->
+<!-- togeojson: convierte KML a GeoJSON. DEBE ir antes de app.js -->
 <script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
+
+<!-- =========================================================
+     MÓDULO PRINCIPAL (al final, cuando todo lo demás existe)
+     ========================================================= -->
+<script type="module" src="js/app.js"></script>
 
 </body>
 
