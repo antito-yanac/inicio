@@ -1,5 +1,5 @@
 {
-  "actualizado": "2026-10-04T21:18:20.166Z",
+  "actualizado": "2026-10-04T21:21:18.314Z",
   "estadoGlobal": "AMARILLA",
   "estadoGlobalNumero": 1,
   "totalSectores": 4,
@@ -32,7 +32,7 @@
       "nivelNumero": 1,
       "color": "#FFD400",
       "inicio": "2026-10-04 15:35:36",
-      "fin": "2026-10-04 16:37:04"
+      "fin": "2026-10-04 16:49:08"
     },
     {
       "nombre": "Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
@@ -40,7 +40,7 @@
       "nivelNumero": 1,
       "color": "#FFD400",
       "inicio": "2026-10-04 15:35:36",
-      "fin": "2026-10-04 16:37:04"
+      "fin": "2026-10-04 16:49:08"
     }
   ],
   "alertas": [
@@ -83,14 +83,14 @@
       "distrito": "Zona 3 - Tucush",
       "lat": -9.5263487,
       "lng": -77.0485794,
-      "duracionMin": 61,
+      "duracionMin": 74,
       "timestampInicio": 1791146136000,
       "inicio": "2026-10-04 15:35:36",
-      "fin": "2026-10-04 16:37:04",
+      "fin": "2026-10-04 16:49:08",
       "color": "#FFD400",
       "emoji": "🟡",
       "titulo": "⚡ ALERTA AMARILLA — Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa)",
-      "mensaje": "Actividad eléctrica detectada en Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa) (Zona 3 - Tucush). Nivel AMARILLA. Inicio: 2026-10-04 15:35:36. Fin previsto: 2026-10-04 16:37:04."
+      "mensaje": "Actividad eléctrica detectada en Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa) (Zona 3 - Tucush). Nivel AMARILLA. Inicio: 2026-10-04 15:35:36. Fin previsto: 2026-10-04 16:49:08."
     },
     {
       "sectorOriginal": "Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
@@ -99,14 +99,14 @@
       "distrito": "Zona 4 - Tajo",
       "lat": -9.5416465,
       "lng": -77.0707659,
-      "duracionMin": 61,
+      "duracionMin": 74,
       "timestampInicio": 1791146136000,
       "inicio": "2026-10-04 15:35:36",
-      "fin": "2026-10-04 16:37:04",
+      "fin": "2026-10-04 16:49:08",
       "color": "#FFD400",
       "emoji": "🟡",
       "titulo": "⚡ ALERTA AMARILLA — Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
-      "mensaje": "Actividad eléctrica detectada en Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria) (Zona 4 - Tajo). Nivel AMARILLA. Inicio: 2026-10-04 15:35:36. Fin previsto: 2026-10-04 16:37:04."
+      "mensaje": "Actividad eléctrica detectada en Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria) (Zona 4 - Tajo). Nivel AMARILLA. Inicio: 2026-10-04 15:35:36. Fin previsto: 2026-10-04 16:49:08."
     }
   ]
 }
