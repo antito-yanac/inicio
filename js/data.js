@@ -1,7 +1,7 @@
 // js/data.js
 // ============================================================
 //  Carga de lugares desde KML (con fallback a JSON)
-//  v2: extrae la CARPETA padre de cada Placemark para filtrado
+//  v3: extrae CARPETA padre + expone obtenerCarpetas()
 // ============================================================
 
 let geojsonOriginal = null;
@@ -66,8 +66,7 @@ async function cargarDesdeKML(url) {
     if (placemarks.length !== geojson.features.length) {
         console.warn(
             `data.js: desfase Placemarks (${placemarks.length}) ` +
-            `vs features (${geojson.features.length}). ` +
-            `El filtrado por carpeta puede ser impreciso.`
+            `vs features (${geojson.features.length}).`
         );
     }
 
@@ -153,7 +152,7 @@ function normalizarFeature(feature, index) {
         }
     }
 
-    // Inyectar 'tipo' en las properties para que filtrarLugares() lo vea
+    // Inyectar 'tipo' en las properties para filtrarLugares()
     feature.properties = { ...feature.properties, tipo };
 
     return {
@@ -175,16 +174,14 @@ export function obtenerGeoJSON() {
     return geojsonOriginal;
 }
 
+// ⬅️ NUEVO: devuelve la lista de carpetas únicas
 export function obtenerCarpetas(lugares) {
     const set = new Set();
     lugares.forEach(l => { if (l.carpeta) set.add(l.carpeta); });
 
-    // Ordenar: primero "(Raíz)", luego alfabético
-    const arr = Array.from(set).sort((a, b) => {
+    return Array.from(set).sort((a, b) => {
         if (a === "(Raíz)") return -1;
         if (b === "(Raíz)") return 1;
         return a.localeCompare(b, "es");
     });
-
-    return arr;
 }
