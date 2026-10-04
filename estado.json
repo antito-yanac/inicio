@@ -1,47 +1,112 @@
 {
-  "actualizado": "2026-10-04T22:27:09.042Z",
-  "estadoGlobal": "VERDE",
-  "estadoGlobalNumero": 0,
+  "actualizado": "2026-10-04T22:29:09.543Z",
+  "estadoGlobal": "AMARILLA",
+  "estadoGlobalNumero": 1,
   "totalSectores": 4,
   "resumen": {
     "roja": 0,
     "naranja": 0,
-    "amarilla": 0,
-    "verde": 4
+    "amarilla": 4,
+    "verde": 0
   },
   "sectores": [
     {
       "nombre": "Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha)",
-      "nivel": "VERDE",
-      "nivelNumero": 0,
-      "color": "#2ECC71",
-      "inicio": null,
-      "fin": null
+      "nivel": "AMARILLA",
+      "nivelNumero": 1,
+      "color": "#FFD400",
+      "inicio": "2026-10-04 17:28:48",
+      "fin": "2026-10-04 17:58:48"
     },
     {
       "nombre": "Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado)",
-      "nivel": "VERDE",
-      "nivelNumero": 0,
-      "color": "#2ECC71",
-      "inicio": null,
-      "fin": null
+      "nivel": "AMARILLA",
+      "nivelNumero": 1,
+      "color": "#FFD400",
+      "inicio": "2026-10-04 17:28:48",
+      "fin": "2026-10-04 17:58:48"
     },
     {
       "nombre": "Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa)",
-      "nivel": "VERDE",
-      "nivelNumero": 0,
-      "color": "#2ECC71",
-      "inicio": null,
-      "fin": null
+      "nivel": "AMARILLA",
+      "nivelNumero": 1,
+      "color": "#FFD400",
+      "inicio": "2026-10-04 17:28:48",
+      "fin": "2026-10-04 17:58:48"
     },
     {
       "nombre": "Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
-      "nivel": "VERDE",
-      "nivelNumero": 0,
-      "color": "#2ECC71",
-      "inicio": null,
-      "fin": null
+      "nivel": "AMARILLA",
+      "nivelNumero": 1,
+      "color": "#FFD400",
+      "inicio": "2026-10-04 17:28:48",
+      "fin": "2026-10-04 17:58:48"
     }
   ],
-  "alertas": []
+  "alertas": [
+    {
+      "sectorOriginal": "Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha)",
+      "nivelScraper": "AMARILLA",
+      "nivel": "amarilla",
+      "distrito": "Zona 1 - Campamentos",
+      "lat": -9.5822364,
+      "lng": -77.02231,
+      "duracionMin": 30,
+      "timestampInicio": 1791152928000,
+      "inicio": "2026-10-04 17:28:48",
+      "fin": "2026-10-04 17:58:48",
+      "color": "#FFD400",
+      "emoji": "🟡",
+      "titulo": "⚡ ALERTA AMARILLA — Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha)",
+      "mensaje": "Actividad eléctrica detectada en Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha) (Zona 1 - Campamentos). Nivel AMARILLA. Inicio: 2026-10-04 17:28:48. Fin previsto: 2026-10-04 17:58:48."
+    },
+    {
+      "sectorOriginal": "Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado)",
+      "nivelScraper": "AMARILLA",
+      "nivel": "amarilla",
+      "distrito": "Zona 2 - Botadero Este",
+      "lat": -9.5718388,
+      "lng": -77.0447182,
+      "duracionMin": 30,
+      "timestampInicio": 1791152928000,
+      "inicio": "2026-10-04 17:28:48",
+      "fin": "2026-10-04 17:58:48",
+      "color": "#FFD400",
+      "emoji": "🟡",
+      "titulo": "⚡ ALERTA AMARILLA — Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado)",
+      "mensaje": "Actividad eléctrica detectada en Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado) (Zona 2 - Botadero Este). Nivel AMARILLA. Inicio: 2026-10-04 17:28:48. Fin previsto: 2026-10-04 17:58:48."
+    },
+    {
+      "sectorOriginal": "Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa)",
+      "nivelScraper": "AMARILLA",
+      "nivel": "amarilla",
+      "distrito": "Zona 3 - Tucush",
+      "lat": -9.5263487,
+      "lng": -77.0485794,
+      "duracionMin": 30,
+      "timestampInicio": 1791152928000,
+      "inicio": "2026-10-04 17:28:48",
+      "fin": "2026-10-04 17:58:48",
+      "color": "#FFD400",
+      "emoji": "🟡",
+      "titulo": "⚡ ALERTA AMARILLA — Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa)",
+      "mensaje": "Actividad eléctrica detectada en Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa) (Zona 3 - Tucush). Nivel AMARILLA. Inicio: 2026-10-04 17:28:48. Fin previsto: 2026-10-04 17:58:48."
+    },
+    {
+      "sectorOriginal": "Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
+      "nivelScraper": "AMARILLA",
+      "nivel": "amarilla",
+      "distrito": "Zona 4 - Tajo",
+      "lat": -9.5416465,
+      "lng": -77.0707659,
+      "duracionMin": 30,
+      "timestampInicio": 1791152928000,
+      "inicio": "2026-10-04 17:28:48",
+      "fin": "2026-10-04 17:58:48",
+      "color": "#FFD400",
+      "emoji": "🟡",
+      "titulo": "⚡ ALERTA AMARILLA — Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
+      "mensaje": "Actividad eléctrica detectada en Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria) (Zona 4 - Tajo). Nivel AMARILLA. Inicio: 2026-10-04 17:28:48. Fin previsto: 2026-10-04 17:58:48."
+    }
+  ]
 }
