@@ -536,3 +536,32 @@ export function limpiarPoligonosZona() {
 export function obtenerPoligonosActivos() {
     return Array.from(poligonosActivos.keys());
 }
+// ======================================================
+// FILTRAR LUGARES (oculta/muestra capas existentes)
+// ------------------------------------------------------
+// Recibe un predicado (props) => boolean.
+// NO reconstruye geoLayer → rápido y sin parpadeos.
+// Devuelve el número de features visibles.
+// ======================================================
+export function filtrarLugares(predicado) {
+    if (!geoLayer || typeof predicado !== "function") return 0;
+
+    let visibles = 0;
+
+    geoLayer.eachLayer(layer => {
+        const f = layer.feature;
+        if (!f) return;
+
+        const props = f.properties || {};
+        const mostrar = predicado(props);
+
+        if (mostrar) {
+            if (!map.hasLayer(layer)) layer.addTo(map);
+            visibles++;
+        } else {
+            if (map.hasLayer(layer)) map.removeLayer(layer);
+        }
+    });
+
+    return visibles;
+}
