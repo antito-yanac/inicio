@@ -1,13 +1,14 @@
 // js/data.js
 // ============================================================
 //  Carga de lugares desde KML (con fallback a JSON)
-//  v3: extrae CARPETA padre + expone obtenerCarpetas()
+//  v4: filtra features sin coordenadas válidas y blinda
+//      la normalización para no romper Leaflet.
 // ============================================================
 
 let geojsonOriginal = null;
 
 const KML_URL  = "./lugares.kml";
-const JSON_URL = "./lugares.json";   // respaldo
+const JSON_URL = "./lugares.json";
 
 
 // ======================================================
@@ -30,9 +31,54 @@ export async function cargarLugares() {
         console.info(`data.js: JSON cargado (${geojson.features.length} features)`);
     }
 
-    geojsonOriginal = geojson;
+    // Filtrar features sin coordenadas válidas (rompen Leaflet)
+    const featuresValidas = geojson.features.filter(f => tieneCoordsValidas(f));
 
-    return geojson.features.map((feature, index) => normalizarFeature(feature, index));
+    if (featuresValidas.length !== geojson.features.length) {
+        console.warn(
+            `data.js: descartados ${geojson.features.length - featuresValidas.length} ` +
+            `features sin coordenadas válidas`
+        );
+    }
+
+    geojsonOriginal = {
+        ...geojson,
+        features: featuresValidas
+    };
+
+    return featuresValidas.map((feature, index) => normalizarFeature(feature, index));
+}
+
+
+// ======================================================
+// HELPERS
+// ======================================================
+
+function tieneCoordsValidas(feature) {
+    if (!feature || !feature.geometry || !feature.geometry.type) return false;
+    const c = feature.geometry.coordinates;
+    if (!c) return false;
+
+    const t = feature.geometry.type;
+
+    if (t === "Point") {
+        return Array.isArray(c) && c.length >= 2 &&
+               typeof c[0] === "number" && typeof c[1] === "number" &&
+               !isNaN(c[0]) && !isNaN(c[1]);
+    }
+    if (t === "LineString") {
+        return Array.isArray(c) && c.length >= 2 && Array.isArray(c[0]);
+    }
+    if (t === "Polygon") {
+        return Array.isArray(c) && c.length >= 1 && Array.isArray(c[0]) && Array.isArray(c[0][0]);
+    }
+    if (t === "MultiPoint" || t === "MultiLineString" || t === "MultiPolygon") {
+        return Array.isArray(c) && c.length >= 1;
+    }
+    if (t === "GeometryCollection") {
+        return Array.isArray(feature.geometry.geometries);
+    }
+    return false;
 }
 
 
@@ -60,7 +106,6 @@ async function cargarDesdeKML(url) {
         throw new Error("togeojson no devolvió features");
     }
 
-    // 👇 MAPEO Placemark ↔ Feature ↔ Carpeta
     const placemarks = kmlDom.querySelectorAll("Placemark");
 
     if (placemarks.length !== geojson.features.length) {
@@ -73,7 +118,6 @@ async function cargarDesdeKML(url) {
     placemarks.forEach((pm, i) => {
         if (!geojson.features[i]) return;
 
-        // Subir por el DOM hasta el Folder padre
         let padre = pm.parentElement;
         let carpeta = "(Raíz)";
         while (padre) {
@@ -174,7 +218,6 @@ export function obtenerGeoJSON() {
     return geojsonOriginal;
 }
 
-// ⬅️ NUEVO: devuelve la lista de carpetas únicas
 export function obtenerCarpetas(lugares) {
     const set = new Set();
     lugares.forEach(l => { if (l.carpeta) set.add(l.carpeta); });
