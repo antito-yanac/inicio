@@ -96,19 +96,27 @@ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
                 Cargando lugares...
             </div>
 
-            <!-- FILTROS: tipo de geometría -->
-            <div class="type-filter" id="type-filter">
-                <button class="type-btn active" data-type="all">Todo</button>
-                <button class="type-btn" data-type="Point">📍 Puntos</button>
-                <button class="type-btn" data-type="Polygon">⬡ Polígonos</button>
-                <button class="type-btn" data-type="LineString">〰 Rutas</button>
-            </div>
 
-            <!-- FILTRO: carpeta del KML -->
-            <div class="folder-filter">
-                <select id="folder-select" aria-label="Filtrar por carpeta">
-                    <option value="__all__">📁 Todas las carpetas</option>
-                </select>
+            <!-- ============================================
+                 FILTROS UNIFICADOS (tipo + carpeta)
+                 ============================================ -->
+            <div class="filter-bar">
+
+                <div class="type-filter" id="type-filter">
+                    <button class="type-btn active" data-type="all">Todo</button>
+                    <button class="type-btn" data-type="Point">Puntos</button>
+                    <button class="type-btn" data-type="Polygon">Polígonos</button>
+                    <button class="type-btn" data-type="LineString">Rutas</button>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="folder-filter">
+                    <select id="folder-select" aria-label="Filtrar por carpeta">
+                        <option value="__all__">Todas</option>
+                    </select>
+                </div>
+
             </div>
 
         </div>
@@ -177,16 +185,12 @@ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
      LIBRERÍAS EXTERNAS (deben cargar ANTES de js/app.js)
      ========================================================= -->
 
-<!-- Fuse.js: buscador difuso -->
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
 
-<!-- Leaflet: mapa -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- JSZip: para abrir .kmz (opcional, si lo usas) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-<!-- togeojson: convierte KML a GeoJSON. DEBE ir antes de app.js -->
 <script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
 
 <!-- =========================================================
