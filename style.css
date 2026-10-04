@@ -658,3 +658,73 @@ body {
 
     font-weight: 850;
 }
+/* ============================================================
+   Filtros de tipo y carpeta
+   ============================================================ */
+
+.type-filter {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.type-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent;
+    color: #cfd6e1;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: all .15s ease;
+    white-space: nowrap;
+}
+
+.type-btn.active,
+.type-btn:hover {
+    background: #4285f4;
+    color: #fff;
+    border-color: #4285f4;
+}
+
+.folder-filter {
+    margin-top: 10px;
+    width: 100%;
+    position: relative;
+}
+
+#folder-select {
+    width: 100%;
+    padding: 10px 38px 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background-color: #1e2530;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    transition: border-color .15s, background-color .15s;
+}
+
+#folder-select:hover {
+    border-color: rgba(66,133,244,0.6);
+}
+
+#folder-select:focus {
+    outline: none;
+    border-color: #4285f4;
+    box-shadow: 0 0 0 2px rgba(66,133,244,0.25);
+}
+
+#folder-select option {
+    background: #1e2530;
+    color: #fff;
+    padding: 8px;
+}
