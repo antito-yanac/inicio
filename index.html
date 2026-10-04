@@ -92,8 +92,22 @@ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
             <!-- RESULTADOS DEL BUSCADOR -->
             <div id="results"></div>
 
-            <div id="stats">
+            <div id="stats" >
                 Cargando lugares...
+            </div>
+            <!-- FILTROS: tipo de geometría -->
+            <div class="type-filter" id="type-filter">
+                <button class="type-btn active" data-type="all">Todo</button>
+                <button class="type-btn" data-type="Point">📍 Puntos</button>
+                <button class="type-btn" data-type="Polygon">⬡ Polígonos</button>
+                <button class="type-btn" data-type="LineString">〰 Rutas</button>
+            </div>
+
+            <!-- FILTRO: carpeta del KML -->
+            <div class="folder-filter">
+                <select id="folder-select" aria-label="Filtrar por carpeta">
+                    <option value="__all__">📁 Todas las carpetas</option>
+                </select>
             </div>
 
         </div>
