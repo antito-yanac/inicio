@@ -1,7 +1,7 @@
 // js/map.js
 // ============================================================
 //  Mapa Leaflet — Antamina
-//  v4: zoom en bottomright + filtrarLugares() exportado
+//  v5: zoom bottomright + filtrarLugares + carga robusta
 // ============================================================
 
 let map;
@@ -33,11 +33,9 @@ function colorDeNivel(nivelKey) {
     return COLORES_NIVEL[nivelKey] || COLORES_NIVEL.roja;
 }
 
-// ======================================================
-//  MAPA DE POLÍGONOS ACTIVOS
-// ======================================================
 const poligonosActivos = new Map();
 let zonasData = null;
+
 
 // ======================================================
 // ILUMINAR DISTRITO
@@ -99,6 +97,7 @@ export function iluminarDistrito(lat, lng, nivelKey = "roja") {
         }
     };
 }
+
 
 // ======================================================
 // ILUMINAR ZONA DESDE GEOJSON
@@ -227,15 +226,14 @@ export async function iluminarDistritoZona(nombreZona, nivelKey = "roja") {
     };
 }
 
+
 // ======================================================
 // CREAR MAPA
 // ======================================================
 export function crearMapa(idDiv) {
 
-    // ⬅️ CORREGIDO: desactivar zoom por defecto
+    // Zoom en bottomright
     map = L.map(idDiv, { zoomControl: false });
-
-    // ⬅️ NUEVO: zoom en bottomright
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
     iconoTu = L.divIcon({
@@ -265,9 +263,9 @@ export function crearMapa(idDiv) {
         btnUbicacion.addEventListener("click", mostrarMiUbicacion);
     }
 
-    // ⬅️ CORREGIDO: incluir filtrarLugares en el return
     return { cargarGeoJSON, irA, limpiarSeleccion, filtrarLugares };
 }
+
 
 // ======================================================
 // MOSTRAR MI UBICACIÓN
@@ -275,14 +273,12 @@ export function crearMapa(idDiv) {
 function mostrarMiUbicacion() {
 
     const btn = document.getElementById("btn-ubicacion");
-
     if (!navigator.geolocation) {
         alert("Tu navegador no soporta geolocalización.");
         return;
     }
 
     btn.classList.add("buscar");
-
     const options = { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 };
 
     navigator.geolocation.getCurrentPosition(
@@ -348,35 +344,61 @@ function mostrarMiUbicacion() {
     );
 }
 
+
 // ======================================================
-// CARGAR GEOJSON
+// CARGAR GEOJSON (blindado)
 // ======================================================
 function cargarGeoJSON(lugares) {
-    if (geoLayer) geoLayer.remove();
+
+    if (geoLayer) {
+        try { geoLayer.remove(); } catch (e) {}
+        geoLayer = null;
+    }
+
+    if (!Array.isArray(lugares) || lugares.length === 0) {
+        console.warn("map.js: cargarGeoJSON recibió 0 lugares");
+        return;
+    }
 
     const geojson = {
         type: "FeatureCollection",
-        features: lugares.map(l => l.feature)
+        features: lugares
+            .map(l => l.feature)
+            .filter(f => f && f.geometry)
     };
 
-    geoLayer = L.geoJSON(geojson, {
-        pointToLayer(feature, latlng) {
-            return L.circleMarker(latlng, {
-                radius: 7, fillColor: "#4285f4", color: "#ffffff",
-                weight: 2, opacity: 1, fillOpacity: 0.9
-            });
-        },
-        onEachFeature(feature, layer) {
-            const nombre = feature.properties?.Name || "Sin nombre";
-            layer.bindPopup(`<b>${nombre}</b><br>${feature.geometry.type}`);
-        }
-    }).addTo(map);
+    if (geojson.features.length === 0) {
+        console.warn("map.js: no hay features válidas para dibujar");
+        return;
+    }
 
-    map.fitBounds(geoLayer.getBounds(), { padding: [30, 30] });
+    try {
+        geoLayer = L.geoJSON(geojson, {
+            pointToLayer(feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 7, fillColor: "#4285f4", color: "#ffffff",
+                    weight: 2, opacity: 1, fillOpacity: 0.9
+                });
+            },
+            onEachFeature(feature, layer) {
+                const nombre = feature.properties?.Name || "Sin nombre";
+                layer.bindPopup(`<b>${nombre}</b><br>${feature.geometry.type}`);
+            }
+        }).addTo(map);
+
+        const bounds = geoLayer.getBounds();
+        if (bounds && bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [30, 30] });
+        }
+
+    } catch (err) {
+        console.error("map.js: error creando geoLayer:", err);
+    }
 }
 
+
 // ======================================================
-// ⬅️ NUEVO: FILTRAR LUGARES
+// FILTRAR LUGARES
 // ======================================================
 export function filtrarLugares(predicado) {
     if (!geoLayer || typeof predicado !== "function") return 0;
@@ -401,11 +423,13 @@ export function filtrarLugares(predicado) {
     return visibles;
 }
 
+
 function limpiarSeleccion() {
     if (markerSeleccionado) {
         markerSeleccionado.setStyle({ fillColor: "#4285f4", radius: 7 });
     }
 }
+
 
 function irA(lugar) {
     limpiarSeleccion();
@@ -416,6 +440,8 @@ function irA(lugar) {
         const desplazamientoY = Math.round(map.getSize().y * 0.10);
         map.panBy([0, desplazamientoY], { animate: true, duration: 0.5 });
     });
+
+    if (!geoLayer) return;
 
     geoLayer.eachLayer(layer => {
         const f = layer.feature;
@@ -428,6 +454,7 @@ function irA(lugar) {
         }
     });
 }
+
 
 // ======================================================
 // CARGAR ZONAS.JSON
@@ -443,6 +470,7 @@ async function cargarZonas() {
         return null;
     }
 }
+
 
 // ======================================================
 // PINTAR POLÍGONO DE ZONA
@@ -486,8 +514,41 @@ export async function pintarPoligonoZona(nombreZona, color = "#e74c3c") {
     };
 }
 
+
 // ======================================================
 // QUITAR UN POLÍGONO ESPECÍFICO
 // ======================================================
 export function quitarPoligonoZona(nombreZona) {
-    if (!map)
+    if (!map) return false;
+
+    for (const [key, entry] of poligonosActivos.entries()) {
+        if (key === nombreZona ||
+            key.includes(nombreZona) ||
+            nombreZona.includes(key)) {
+            try { map.removeLayer(entry.poligono); } catch (e) {}
+            poligonosActivos.delete(key);
+            return true;
+        }
+    }
+    return false;
+}
+
+
+// ======================================================
+// QUITAR TODOS LOS POLÍGONOS
+// ======================================================
+export function limpiarPoligonosZona() {
+    if (!map) return;
+    for (const [, entry] of poligonosActivos.entries()) {
+        try { map.removeLayer(entry.poligono); } catch (e) {}
+    }
+    poligonosActivos.clear();
+}
+
+
+// ======================================================
+// CONSULTAR POLÍGONOS ACTIVOS
+// ======================================================
+export function obtenerPoligonosActivos() {
+    return Array.from(poligonosActivos.keys());
+}
