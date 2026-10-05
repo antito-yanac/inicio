@@ -1,21 +1,8 @@
 // js/estado-cliente.js
 // ============================================================
-// Puente entre estado.json (publicado por monitor.js en Termux)
-// y el sistema de alertas de Antamina.
-//
-// Modos:
-//   - modo: "admin"  → Lee estado.json, y por cada alerta NUEVA
-//                      llama a enviarMensajePush() (Firestore).
-//                      Solo corre en admin.html con sesión.
-//   - modo: "index"  → Lee estado.json, y por cada alerta NUEVA
-//                      llama a mostrarAlertaCompleta() directamente.
-//                      Sirve como respaldo si admin.html está cerrado.
-//                      Corre en index.html.
-//
-// Filtros:
-//   E1) Solo dispara si nivel ∈ {amarilla, naranja, roja}. VERDE = no.
-//   F3) Dispara cuando cambia el nivel O cuando cambia el
-//       timestampInicio (evento nuevo).
+// Puente estado.json ↔ sistema de alertas (v3)
+// v3: primera carga siempre reconstruye el estado del mapa
+// (ignora el historial la primera vez tras recargar).
 // ============================================================
 
 import { mostrarAlertaCompleta, mostrarAlertaLibre, quitarAlerta } from "./alertas.js";
@@ -25,20 +12,17 @@ const INTERVALO_MS  = 30_000;
 const STORAGE_KEY   = "keraunos_estado_cliente_v2";
 const MAX_HISTORIAL = 200;
 
-// Estado interno del cliente
 const cliente = {
-    modo: null,                 // "admin" | "index"
+    modo: null,
     intervaloId: null,
-    // Historial: { clave -> { nivel, timestampInicio } }
-    historial: {},              // Map serializable
-    // Últimas zonas vistas: para detectar resoluciones
-    zonasVistas: new Set(),     // distritos con alerta activa en el último ciclo
+    historial: {},
+    zonasVistas: new Set(),
     cargado: false
 };
 
-// ------------------------------------------------------------
-// Persistencia del historial
-// ------------------------------------------------------------
+// FIX 2: primera carga tras recargar la página
+let primeraCarga = true;
+
 function cargarHistorial() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -55,7 +39,6 @@ function cargarHistorial() {
 
 function guardarHistorial(historial, zonas) {
     try {
-        // Limitar a MAX_HISTORIAL entradas
         const claves = Object.keys(historial);
         if (claves.length > MAX_HISTORIAL) {
             const recortadas = claves.slice(-MAX_HISTORIAL);
@@ -70,16 +53,10 @@ function guardarHistorial(historial, zonas) {
     } catch {}
 }
 
-// ------------------------------------------------------------
-// Clave única para cada alerta: distrito::timestampInicio
-// ------------------------------------------------------------
 function claveAlerta(a) {
     return `${a.distrito}::${a.timestampInicio}`;
 }
 
-// ------------------------------------------------------------
-// Leer estado.json (con cache-busting)
-// ------------------------------------------------------------
 async function leerEstado() {
     const url = `${ESTADO_URL}?t=${Date.now()}`;
     const res = await fetch(url, { cache: "no-store" });
@@ -87,16 +64,11 @@ async function leerEstado() {
     return res.json();
 }
 
-// ------------------------------------------------------------
-// Enviar alerta a Firestore (solo modo admin)
-// ------------------------------------------------------------
 async function enviarAlertaFirestore(alerta) {
     const { enviarMensajePush } = await import("./mensajes.js");
-
-    // Armar datosAlerta en el formato que espera enviarMensajePush
     const datosAlerta = {
         tipo:            "alerta",
-        nivel:           alerta.nivel,                  // "amarilla" | "naranja" | "roja"
+        nivel:           alerta.nivel,
         distrito:        alerta.distrito,
         lat:             alerta.lat,
         lng:             alerta.lng,
@@ -106,7 +78,6 @@ async function enviarAlertaFirestore(alerta) {
         inicio:          alerta.inicio,
         fin:             alerta.fin
     };
-
     await enviarMensajePush(
         alerta.titulo || `⚡ ALERTA ${alerta.nivel.toUpperCase()} — ${alerta.distrito}`,
         alerta.mensaje || `Actividad eléctrica detectada en ${alerta.distrito}.`,
@@ -114,24 +85,15 @@ async function enviarAlertaFirestore(alerta) {
     );
 }
 
-// ------------------------------------------------------------
-// Enviar resolución a Firestore (solo modo admin)
-// ------------------------------------------------------------
 async function enviarResolucionFirestore(distrito) {
     const { enviarMensajePush } = await import("./mensajes.js");
     await enviarMensajePush(
         `✅ Alerta finalizada — ${distrito}`,
         `La alerta meteorológica en ${distrito} ha finalizado.`,
-        {
-            tipo: "alerta-resuelta",
-            distrito
-        }
+        { tipo: "alerta-resuelta", distrito }
     );
 }
 
-// ------------------------------------------------------------
-// Ciclo principal
-// ------------------------------------------------------------
 async function ciclo() {
     let data;
     try {
@@ -143,23 +105,14 @@ async function ciclo() {
 
     const alertas = Array.isArray(data.alertas) ? data.alertas : [];
 
-    // Cargar historial persistido
     const { historial, zonas } = cargarHistorial();
     const zonasVistas = new Set(zonas);
 
-    // Distritos presentes en este ciclo (con nivel > verde)
     const distritosActuales = new Set();
 
-    // --------------------------------------------------------
-    // FASE 1 — Detectar alertas NUEVAS (E1 + F3)
-    // --------------------------------------------------------
+    // FASE 1
     for (const a of alertas) {
-        // E1: solo alertas amarilla, naranja, roja
-        if (a.nivel !== "amarilla" && a.nivel !== "naranja" && a.nivel !== "roja") {
-            continue;
-        }
-
-        // Verificar que tenga distrito (si no, no podemos pintarlo)
+        if (a.nivel !== "amarilla" && a.nivel !== "naranja" && a.nivel !== "roja") continue;
         if (!a.distrito) continue;
 
         distritosActuales.add(a.distrito);
@@ -167,14 +120,10 @@ async function ciclo() {
         const clave = claveAlerta(a);
         const anterior = historial[clave];
 
-        // F3: dispara si es nueva, o si cambió el nivel con el mismo
-        // timestampInicio (poco probable pero posible), o si es un
-        // timestampInicio distinto (evento nuevo).
-        const esNueva = !anterior;
+        // FIX 2: la primera carga siempre dispara
+        const esNueva = primeraCarga || !anterior;
 
         if (esNueva) {
-            // Registrar ANTES de disparar (para evitar duplicados si
-            // el ciclo se solapa)
             historial[clave] = {
                 nivel: a.nivel,
                 timestampInicio: a.timestampInicio,
@@ -182,25 +131,18 @@ async function ciclo() {
             };
             zonasVistas.add(a.distrito);
 
-            // Disparar según el modo
             if (cliente.modo === "admin") {
                 try {
                     await enviarAlertaFirestore(a);
-                    // Toast informativo (no bloquea)
                     try {
                         const { mostrarToast } = await import("./notifications.js");
-                        mostrarToast(
-                            "🤖 Alerta automática enviada",
-                            `${a.distrito} · ${a.nivel.toUpperCase()}`,
-                            "exito",
-                            false
-                        );
+                        mostrarToast("🤖 Alerta automática enviada",
+                            `${a.distrito} · ${a.nivel.toUpperCase()}`, "exito", false);
                     } catch {}
                 } catch (e) {
                     console.error("estado-cliente: error enviando a Firestore:", e);
                 }
             } else if (cliente.modo === "index") {
-                // Modo index: mostrar directamente como respaldo
                 try {
                     await mostrarAlertaCompleta({
                         tipo:            "alerta",
@@ -223,10 +165,7 @@ async function ciclo() {
         }
     }
 
-    // --------------------------------------------------------
-    // FASE 2 — Detectar alertas RESUELTAS (D2)
-    // Una zona que antes estaba en alerta y ya no está en el JSON.
-    // --------------------------------------------------------
+    // FASE 2
     const distritosResueltos = [];
     for (const distritoAnterior of zonasVistas) {
         if (!distritosActuales.has(distritoAnterior)) {
@@ -242,12 +181,7 @@ async function ciclo() {
                 await enviarResolucionFirestore(distrito);
                 try {
                     const { mostrarToast } = await import("./notifications.js");
-                    mostrarToast(
-                        "✅ Alerta finalizada",
-                        distrito,
-                        "info",
-                        false
-                    );
+                    mostrarToast("✅ Alerta finalizada", distrito, "info", false);
                 } catch {}
             } catch (e) {
                 console.error("estado-cliente: error enviando resolución:", e);
@@ -261,36 +195,31 @@ async function ciclo() {
         }
     }
 
-    // --------------------------------------------------------
-    // FASE 3 — Si no hay ninguna zona activa, mostrar libre
-    // (solo en modo index; en admin no pintamos nada)
-    // --------------------------------------------------------
+    // FASE 3
     if (cliente.modo === "index" &&
         distritosActuales.size === 0 &&
         zonasVistas.size === 0 &&
         !cliente.cargado) {
-        // Solo la primera vez, mostrar libre
         try { await mostrarAlertaLibre(); } catch {}
         cliente.cargado = true;
     }
 
-    // Persistir historial
+    // FIX 2: marcar primera carga como completada
+    if (primeraCarga) primeraCarga = false;
+
     guardarHistorial(historial, zonasVistas);
 }
 
-// ------------------------------------------------------------
-// API pública
-// ------------------------------------------------------------
 export function iniciarEstadoCliente(opciones = {}) {
     if (cliente.intervaloId !== null) return;
 
     cliente.modo = opciones.modo || "index";
     console.log(`estado-cliente: iniciado en modo "${cliente.modo}" (${INTERVALO_MS / 1000}s)`);
 
-    // Primera pasada inmediata
-    ciclo();
+    // FIX 2: forzar primera carga
+    primeraCarga = true;
 
-    // Ciclo periódico
+    ciclo();
     cliente.intervaloId = setInterval(ciclo, INTERVALO_MS);
 }
 
@@ -301,15 +230,13 @@ export function detenerEstadoCliente() {
     }
 }
 
-// ------------------------------------------------------------
-// Utilidad: resetear el historial (útil en pruebas)
-// ------------------------------------------------------------
 export function resetearHistorial() {
     try {
         localStorage.removeItem(STORAGE_KEY);
         cliente.historial = {};
         cliente.zonasVistas = new Set();
         cliente.cargado = false;
+        primeraCarga = true;
         console.log("estado-cliente: historial reseteado");
     } catch {}
 }
