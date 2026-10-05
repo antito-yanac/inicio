@@ -1,5 +1,5 @@
 {
-  "actualizado": "2026-10-05T21:57:30.273Z",
+  "actualizado": "2026-10-05T22:00:40.141Z",
   "estadoGlobal": "ROJA",
   "estadoGlobalNumero": 3,
   "totalSectores": 4,
@@ -16,7 +16,7 @@
       "nivelNumero": 3,
       "color": "#FA5858",
       "inicio": "2026-10-05 15:40:26",
-      "fin": "2026-10-05 17:19:18"
+      "fin": "2026-10-05 17:26:36"
     },
     {
       "nombre": "Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado)",
@@ -51,14 +51,14 @@
       "distrito": "Zona 1 - Campamentos",
       "lat": -9.5822364,
       "lng": -77.02231,
-      "duracionMin": 99,
+      "duracionMin": 106,
       "timestampInicio": 1791232826000,
       "inicio": "2026-10-05 15:40:26",
-      "fin": "2026-10-05 17:19:18",
+      "fin": "2026-10-05 17:26:36",
       "color": "#FA5858",
       "emoji": "🔴",
       "titulo": "⚡ ALERTA ROJA — Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha)",
-      "mensaje": "Actividad eléctrica detectada en Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha) (Zona 1 - Campamentos). Nivel ROJA. Inicio: 2026-10-05 15:40:26. Fin previsto: 2026-10-05 17:19:18."
+      "mensaje": "Actividad eléctrica detectada en Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha) (Zona 1 - Campamentos). Nivel ROJA. Inicio: 2026-10-05 15:40:26. Fin previsto: 2026-10-05 17:26:36."
     },
     {
       "sectorOriginal": "Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado)",
