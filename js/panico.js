@@ -19,7 +19,7 @@ import { obtenerApp } from "./firebase-app.js";
 // CONFIGURACIÓN WHATSAPP (CallMeBot)
 // ------------------------------------------------------------
 const CALLMEBOT_PHONE  = "+51964125058";
-const CALLMEBOT_APIKEY = "TU_API_KEY_AQUI";   // ← pega tu API key aquí
+const CALLMEBOT_APIKEY = "9034887";   // ← pega tu API key aquí
 
 // ------------------------------------------------------------
 // Estado interno
@@ -333,7 +333,7 @@ async function enviarSolicitud() {
 // WhatsApp CallMeBot (usa CALLMEBOT_APIKEY, no CALLMEBOT_KEY)
 // ------------------------------------------------------------
 function enviarWhatsApp(nombre, descripcion, lat, lng) {
-    if (!CALLMEBOT_APIKEY || CALLMEBOT_APIKEY === "TU_API_KEY_AQUI") {
+    if (!CALLMEBOT_APIKEY || CALLMEBOT_APIKEY === "9034887") {
         console.warn("panico: CallMeBot no configurado (falta APIKEY). Se omite WhatsApp.");
         return;
     }
