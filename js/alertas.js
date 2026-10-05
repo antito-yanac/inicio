@@ -1,7 +1,7 @@
 // js/alertas.js
 //
 // ============================================================
-// Sistema de Alerta Meteorológica — v3.2
+// Sistema de Alerta Meteorológica — v3.3
 // ------------------------------------------------------------
 // - Soporta MÚLTIPLES zonas activas simultáneamente.
 // - Cola FIFO de banners (uno por zona, secuencial).
@@ -9,9 +9,9 @@
 // - Maneja "alerta-resuelta" (quita una zona específica).
 // - Cuando todas las zonas vuelven a VERDE → "Libre de alertas".
 // - Cada zona tiene su propio contador sincronizado.
-// - Mapa: N polígonos (delegado a map.js v3).
-// - Click en barra superior reabre el overlay (libre o alerta).
-// - El overlay en estado "libre" no se reabre solo tras cerrarlo.
+// - Mapa: N polígonos + N rayos (delegado a map.js v7).
+// - Click en barra superior reabre el overlay.
+// - La tarjeta agregada muestra tiempo restante por zona.
 // ============================================================
 
 import { reproducirSonidoAlerta, detenerSonidoAlerta } from "./notifications.js";
@@ -98,9 +98,6 @@ const MEDIDAS_SEGURIDAD = {
     ]
 };
 
-// ----------------------------------------------------------
-// SVG del rayo
-// ----------------------------------------------------------
 const SVG_RAYO = `
 <svg class="al-rayo-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <defs>
@@ -114,23 +111,22 @@ const SVG_RAYO = `
 </svg>`;
 
 // ----------------------------------------------------------
-// ESTADO INTERNO — Múltiples zonas activas
+// ESTADO INTERNO
 // ----------------------------------------------------------
 const estado = {
     zonasActivas: new Map(),
     colaBanners: [],
     bannerActual: null,
     intervalContador: null,
-    intervalTimestamp: null
+    intervalTimestamp: null,
+    intervalTiempos: null
 };
 
-// Bandera: el usuario ya cerró el overlay en estado "Libre de alertas".
-// Evita que el ciclo de estado-cliente.js lo reabra automáticamente.
+// Mapa de capas de rayo/círculo por distrito (FIX 1)
+const capasRayos = new Map();
+
 let libreYaCerradoPorUsuario = false;
 
-// ----------------------------------------------------------
-// DURACIÓN DEL TIMER DE ALERTA (default)
-// ----------------------------------------------------------
 const DURACION_TIMER_MINUTOS = 15;
 
 // ----------------------------------------------------------
@@ -140,7 +136,6 @@ function asegurarEstructuraDOM() {
     if (document.getElementById("al-overlay")) return;
 
     const html = `
-    <!-- 1. BANNER A PANTALLA COMPLETA -->
     <div id="al-overlay" role="alertdialog" aria-modal="true" aria-labelledby="al-titulo-texto">
         <div class="al-panel" id="al-panel">
             <div class="al-icono-wrap">
@@ -169,7 +164,6 @@ function asegurarEstructuraDOM() {
         </div>
     </div>
 
-    <!-- 3. BARRA SUPERIOR PERMANENTE -->
     <div id="al-barra-superior" role="alert">
         <span class="al-barra-icono" id="al-barra-icono">⚡</span>
         <span class="al-barra-texto">
@@ -180,7 +174,6 @@ function asegurarEstructuraDOM() {
         <button class="al-barra-cerrar" id="al-barra-cerrar" aria-label="Cerrar barra">×</button>
     </div>
 
-    <!-- 4. TARJETA FLOTANTE -->
     <div id="al-tarjeta" role="alert">
         <button class="al-tarjeta-cerrar" id="al-tarjeta-cerrar" aria-label="Cerrar tarjeta">×</button>
         <div class="al-tarjeta-header">
@@ -194,7 +187,6 @@ function asegurarEstructuraDOM() {
         <button class="al-tarjeta-btn" id="al-tarjeta-btn">Ver</button>
     </div>
 
-    <!-- MODAL DE MEDIDAS DE SEGURIDAD -->
     <div id="al-modal-seguridad" role="dialog" aria-modal="true">
         <div class="al-modal-contenido">
             <h3 class="al-modal-titulo">🛡️ Medidas de seguridad</h3>
@@ -237,9 +229,6 @@ function asegurarEstructuraDOM() {
     });
 }
 
-// ----------------------------------------------------------
-// Importar map.js dinámicamente
-// ----------------------------------------------------------
 async function obtenerModuloMapa() {
     try {
         return await import("./map.js");
@@ -250,11 +239,11 @@ async function obtenerModuloMapa() {
 }
 
 // ==========================================================
-// API PÚBLICA: mostrarAlertaCompleta(datos)
+// MOSTRAR ALERTA COMPLETA
 // ==========================================================
 export async function mostrarAlertaCompleta(datos = {}) {
     try {
-        libreYaCerradoPorUsuario = false; // reset bandera
+        libreYaCerradoPorUsuario = false;
 
         asegurarEstructuraDOM();
 
@@ -285,7 +274,7 @@ export async function mostrarAlertaCompleta(datos = {}) {
             mensaje: datos.mensaje || `Actividad eléctrica detectada en ${distrito}.`
         });
 
-        // Pintar polígono de esa zona en el mapa (sin borrar las otras)
+        // Pintar polígono
         if (datos.distrito) {
             const mod = await obtenerModuloMapa();
             if (mod && typeof mod.pintarPoligonoZona === "function") {
@@ -294,19 +283,23 @@ export async function mostrarAlertaCompleta(datos = {}) {
             }
         }
 
-        // Rayo sobre el punto (solo si es la primera vez que se activa esa zona)
+        // FIX 1: rayo con capa guardada por distrito
         if (!yaExistia && datos.lat != null && datos.lng != null) {
             const mod = await obtenerModuloMapa();
             if (mod && typeof mod.iluminarDistrito === "function") {
-                await mod.iluminarDistrito(datos.lat, datos.lng, nivelKey);
+                // Si ya había una capa para esta zona, destruirla
+                if (capasRayos.has(distrito)) {
+                    try { capasRayos.get(distrito).detener(); } catch (e) {}
+                    capasRayos.delete(distrito);
+                }
+                const capa = await mod.iluminarDistrito(datos.lat, datos.lng, nivelKey);
+                if (capa) capasRayos.set(distrito, capa);
             }
         }
 
-        // Añadir a la cola de banners si es nueva
+        // Añadir a la cola si es nueva
         if (!yaExistia) {
             estado.colaBanners.push(distrito);
-
-            // Ordenar la cola por criticidad: ROJA > NARANJA > AMARILLA.
             estado.colaBanners.sort((a, b) => {
                 const za = estado.zonasActivas.get(a);
                 const zb = estado.zonasActivas.get(b);
@@ -315,17 +308,16 @@ export async function mostrarAlertaCompleta(datos = {}) {
             });
         }
 
-        // Si no hay banner abierto, mostrar el siguiente
         if (estado.bannerActual === null) {
             mostrarSiguienteBanner();
+        } else if (estado.bannerActual === distrito) {
+            pintarBannerDeZona(estado.zonasActivas.get(distrito));
         } else {
             actualizarIndicadorCola();
         }
 
-        // Actualizar la barra superior y la tarjeta flotante agregadas
         actualizarBarraYTarjetaAgregadas();
 
-        // Reproducir sonido (solo si es alerta nueva y no vigilancia)
         if (!yaExistia && nivelKey !== "vigilancia") {
             try { reproducirSonidoAlerta(30); } catch (e) {}
         }
@@ -336,7 +328,7 @@ export async function mostrarAlertaCompleta(datos = {}) {
 }
 
 // ==========================================================
-// API PÚBLICA: quitarAlerta(distrito)
+// QUITAR ALERTA
 // ==========================================================
 export async function quitarAlerta(distrito) {
     try {
@@ -352,19 +344,25 @@ export async function quitarAlerta(distrito) {
 
         if (!distritoReal) return false;
 
-        // 1) Quitar polígono del mapa
+        // 1) Quitar polígono
         const mod = await obtenerModuloMapa();
         if (mod && typeof mod.quitarPoligonoZona === "function") {
             mod.quitarPoligonoZona(distritoReal);
         }
 
+        // 1.5) FIX 1: quitar capa del rayo
+        if (capasRayos.has(distritoReal)) {
+            try { capasRayos.get(distritoReal).detener(); } catch (e) {}
+            capasRayos.delete(distritoReal);
+        }
+
         // 2) Quitar del estado
         estado.zonasActivas.delete(distritoReal);
 
-        // 3) Quitar de la cola si estaba pendiente
+        // 3) Quitar de la cola
         estado.colaBanners = estado.colaBanners.filter(d => d !== distritoReal);
 
-        // 4) Si era el banner actual, cerrar y pasar al siguiente (o a libre)
+        // 4) Si era el banner actual
         if (estado.bannerActual === distritoReal) {
             estado.bannerActual = null;
             if (estado.colaBanners.length > 0) {
@@ -393,7 +391,7 @@ export async function quitarAlerta(distrito) {
 }
 
 // ==========================================================
-// COLA DE BANNERS (UI-A)
+// COLA DE BANNERS
 // ==========================================================
 function mostrarSiguienteBanner() {
     if (estado.colaBanners.length === 0) {
@@ -483,11 +481,8 @@ function cerrarBannerActual() {
     if (estado.colaBanners.length > 0) {
         setTimeout(() => mostrarSiguienteBanner(), 400);
     } else if (habiaZonas) {
-        // Había zonas activas: solo actualizar barra/tarjeta
         actualizarBarraYTarjetaAgregadas();
     } else {
-        // Estado "Libre de alertas": marcar que el usuario ya cerró
-        // para que estado-cliente.js no lo reabra cada 30 s.
         libreYaCerradoPorUsuario = true;
         mostrarBarraTarjetaLibre();
     }
@@ -499,12 +494,6 @@ function cerrarBanner() {
     overlay?.classList.remove("al-libre");
 }
 
-// ==========================================================
-// ABRIR OVERLAY LIBRE (a demanda, sin respetar la bandera)
-// ==========================================================
-// Se llama desde abrirBannerDeNuevo() cuando no hay zonas activas.
-// A diferencia de mostrarAlertaLibre(), NO mira la bandera
-// libreYaCerradoPorUsuario: siempre reabre el overlay.
 function abrirOverlayLibre() {
     try {
         asegurarEstructuraDOM();
@@ -552,8 +541,20 @@ function abrirOverlayLibre() {
 }
 
 // ==========================================================
-// BARRA SUPERIOR Y TARJETA AGREGADAS
+// BARRA SUPERIOR Y TARJETA AGREGADAS (FIX 3)
 // ==========================================================
+function formatearTiempoRestante(zona) {
+    const duracionMs = (zona.duracionMin || 15) * 60 * 1000;
+    const transcurrido = Date.now() - (zona.timestampInicio || Date.now());
+    let restante = Math.ceil((duracionMs - transcurrido) / 1000);
+    if (restante < 0) restante = 0;
+
+    const h = Math.floor(restante / 3600);
+    const m = Math.floor((restante % 3600) / 60);
+    const s = restante % 60;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
 function actualizarBarraYTarjetaAgregadas() {
     const barra = document.getElementById("al-barra-superior");
     const tarjeta = document.getElementById("al-tarjeta");
@@ -562,6 +563,10 @@ function actualizarBarraYTarjetaAgregadas() {
     const zonas = Array.from(estado.zonasActivas.values());
 
     if (zonas.length === 0) {
+        if (estado.intervalTiempos) {
+            clearInterval(estado.intervalTiempos);
+            estado.intervalTiempos = null;
+        }
         return;
     }
 
@@ -599,6 +604,7 @@ function actualizarBarraYTarjetaAgregadas() {
         document.getElementById("al-barra-nivel").textContent =
             `${zonas.length} ZONAS EN ALERTA`;
         const resumen = zonas
+            .slice()
             .sort((a, b) => NIVELES_ALERTA[b.nivelKey].orden - NIVELES_ALERTA[a.nivelKey].orden)
             .map(z => {
                 const n = NIVELES_ALERTA[z.nivelKey];
@@ -622,23 +628,54 @@ function actualizarBarraYTarjetaAgregadas() {
         if (z.inicio)         cuerpo.push(`<strong>🕒 Inicio:</strong> ${z.inicio}`);
         if (z.fin)            cuerpo.push(`<strong>⏹️ Fin previsto:</strong> ${z.fin}`);
         cuerpo.push(`<strong>⚡ Nivel:</strong> ${n.nombre}`);
+        cuerpo.push(`<strong>⏰ Restante:</strong> ${formatearTiempoRestante(z)}`);
         document.getElementById("al-tarjeta-cuerpo").innerHTML = cuerpo.join("<br>");
+
+        // Detener intervalo de múltiples si existía
+        if (estado.intervalTiempos) {
+            clearInterval(estado.intervalTiempos);
+            estado.intervalTiempos = null;
+        }
+
     } else {
+        // FIX 3: múltiples zonas con tiempo individual
         document.getElementById("al-tarjeta-sub").textContent = `${zonas.length} ZONAS EN ALERTA`;
         document.getElementById("al-tarjeta-titulo").textContent = "Alerta múltiple";
-        const lineas = zonas
-            .sort((a, b) => NIVELES_ALERTA[b.nivelKey].orden - NIVELES_ALERTA[a.nivelKey].orden)
-            .map(z => {
+
+        const renderLineas = () => {
+            const ordenadas = estado.zonasActivas.size > 0
+                ? Array.from(estado.zonasActivas.values()).slice().sort((a, b) =>
+                    NIVELES_ALERTA[b.nivelKey].orden - NIVELES_ALERTA[a.nivelKey].orden
+                  )
+                : [];
+            const lineas = ordenadas.map(z => {
                 const n = NIVELES_ALERTA[z.nivelKey];
-                return `${n.icono} <strong>${z.distrito}</strong> — ${n.nombre}`;
+                const tiempo = formatearTiempoRestante(z);
+                return `${n.icono} <strong>${z.distrito}</strong> — ${n.nombre}<br>⏰ Restante: ${tiempo}`;
             });
-        document.getElementById("al-tarjeta-cuerpo").innerHTML = lineas.join("<br>");
+            const cuerpoEl = document.getElementById("al-tarjeta-cuerpo");
+            if (cuerpoEl) cuerpoEl.innerHTML = lineas.join("<br><br>");
+        };
+
+        renderLineas();
+
+        if (estado.intervalTiempos) clearInterval(estado.intervalTiempos);
+        estado.intervalTiempos = setInterval(() => {
+            if (estado.zonasActivas.size <= 1) {
+                clearInterval(estado.intervalTiempos);
+                estado.intervalTiempos = null;
+                // Repintar en modo single
+                actualizarBarraYTarjetaAgregadas();
+                return;
+            }
+            renderLineas();
+        }, 1000);
     }
     tarjeta.classList.add("al-visible");
 }
 
 // ==========================================================
-// CONTADOR SINCRONIZADO (por zona)
+// CONTADOR SINCRONIZADO
 // ==========================================================
 function iniciarContadorSincronizado(timestampInicio, duracionMs, distrito) {
     const el = document.getElementById("al-contador");
@@ -688,9 +725,6 @@ function detenerContador() {
     }
 }
 
-// ==========================================================
-// TIMESTAMP "Hace X min" EN LA BARRA
-// ==========================================================
 function actualizarTimestampBarra(timestampInicio) {
     const el = document.getElementById("al-barra-tiempo");
     if (!el) return;
@@ -758,12 +792,10 @@ export function mostrarBarraTarjetaLibre() {
 }
 
 // ==========================================================
-// MOSTRAR ESTADO "LIBRE DE ALERTAS" (idempotente)
+// MOSTRAR ESTADO "LIBRE DE ALERTAS"
 // ==========================================================
 export function mostrarAlertaLibre() {
     try {
-        // Si el usuario ya cerró el overlay en estado libre,
-        // no reabrirlo. Solo asegurar barra/tarjeta verdes.
         if (libreYaCerradoPorUsuario) {
             asegurarEstructuraDOM();
             mostrarBarraTarjetaLibre();
@@ -773,6 +805,18 @@ export function mostrarAlertaLibre() {
         asegurarEstructuraDOM();
         detenerContador();
         detenerSonidoAlerta();
+
+        // Limpiar capas de rayo
+        for (const [, capa] of capasRayos.entries()) {
+            try { capa.detener(); } catch (e) {}
+        }
+        capasRayos.clear();
+
+        // Detener interval de tiempos
+        if (estado.intervalTiempos) {
+            clearInterval(estado.intervalTiempos);
+            estado.intervalTiempos = null;
+        }
 
         obtenerModuloMapa().then(mod => {
             if (mod && typeof mod.limpiarPoligonosZona === "function") {
@@ -784,10 +828,7 @@ export function mostrarAlertaLibre() {
         estado.colaBanners = [];
         estado.bannerActual = null;
 
-        // Delegar el contenido del overlay a abrirOverlayLibre()
         abrirOverlayLibre();
-
-        // Asegurar barra/tarjeta verdes visibles
         mostrarBarraTarjetaLibre();
 
         setTimeout(() => document.getElementById("al-btn-cerrar")?.focus(), 1000);
@@ -802,12 +843,10 @@ export function mostrarAlertaLibre() {
 // ==========================================================
 function verMapaAlerta() {
     try {
-        // Cerrar overlay visualmente
         const overlay = document.getElementById("al-overlay");
         overlay?.classList.remove("al-visible");
         overlay?.classList.remove("al-libre");
 
-        // Pequeña espera para que la transición de cierre se vea bien
         setTimeout(() => {
             const mapEl = document.getElementById("map");
             if (mapEl) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -816,7 +855,6 @@ function verMapaAlerta() {
 }
 
 function abrirBannerDeNuevo() {
-    // Caso 1: hay un banner en curso → reabrirlo
     if (estado.bannerActual) {
         const overlay = document.getElementById("al-overlay");
         if (overlay && !overlay.classList.contains("al-visible")) {
@@ -832,34 +870,26 @@ function abrirBannerDeNuevo() {
         return;
     }
 
-    // Caso 2: hay banners en cola
     if (estado.colaBanners.length > 0) {
         mostrarSiguienteBanner();
         return;
     }
 
-    // Caso 3: hay zonas activas pero sin banner en curso
     if (estado.zonasActivas.size > 0) {
         estado.colaBanners = Array.from(estado.zonasActivas.keys());
-
         estado.colaBanners.sort((a, b) => {
             const za = estado.zonasActivas.get(a);
             const zb = estado.zonasActivas.get(b);
             if (!za || !zb) return 0;
             return NIVELES_ALERTA[zb.nivelKey].orden - NIVELES_ALERTA[za.nivelKey].orden;
         });
-
         mostrarSiguienteBanner();
         return;
     }
 
-    // Caso 4: no hay zonas activas → overlay "Libre de alertas"
     abrirOverlayLibre();
 }
 
-// ==========================================================
-// MODAL DE MEDIDAS DE SEGURIDAD
-// ==========================================================
 function mostrarModalSeguridad() {
     try {
         let nivelKey = "roja";
@@ -874,7 +904,6 @@ function mostrarModalSeguridad() {
             }
             nivelKey = Object.keys(NIVELES_ALERTA).find(k => NIVELES_ALERTA[k] === max) || "roja";
         } else {
-            // Sin zonas: estado libre → nivel vigilancia
             nivelKey = "vigilancia";
         }
         const nivel = NIVELES_ALERTA[nivelKey];
@@ -915,9 +944,6 @@ function cerrarModalSeguridad() {
     document.getElementById("al-modal-seguridad")?.classList.remove("al-visible");
 }
 
-// ==========================================================
-// FLASH DE FONDO
-// ==========================================================
 function activarFlashFondo() {
     try {
         const body = document.body;
@@ -928,9 +954,6 @@ function activarFlashFondo() {
     } catch (e) {}
 }
 
-// ==========================================================
-// CERRAR / OCULTAR
-// ==========================================================
 function ocultarBarraSuperior() {
     const barra = document.getElementById("al-barra-superior");
     if (barra?.classList.contains("al-modo-libre")) return;
@@ -960,9 +983,21 @@ export function cerrarAlertaTotal() {
     cerrarModalSeguridad();
     detenerContador();
     detenerSonidoAlerta();
+
+    for (const [, capa] of capasRayos.entries()) {
+        try { capa.detener(); } catch (e) {}
+    }
+    capasRayos.clear();
+
+    if (estado.intervalTiempos) {
+        clearInterval(estado.intervalTiempos);
+        estado.intervalTiempos = null;
+    }
+
     estado.zonasActivas.clear();
     estado.colaBanners = [];
     estado.bannerActual = null;
+
     obtenerModuloMapa().then(mod => {
         if (mod && typeof mod.limpiarPoligonosZona === "function") {
             mod.limpiarPoligonosZona();
@@ -970,9 +1005,6 @@ export function cerrarAlertaTotal() {
     }).catch(() => {});
 }
 
-// ==========================================================
-// UTILIDADES
-// ==========================================================
 export function hayAlertaActiva() {
     return estado.zonasActivas.size > 0;
 }
