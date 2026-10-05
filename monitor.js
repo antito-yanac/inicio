@@ -1,5 +1,5 @@
 // ============================================================
-//  Monitor Keraunos — Scraper (v8)
+//  Monitor Keraunos — Scraper (v9)
 //  ------------------------------------------------------------
 //  Responsabilidad ÚNICA:
 //    1. Scrapear Keraunos cada INTERVALO ms.
@@ -7,19 +7,29 @@
 //    3. Escribir estado.json con `sectores[]` + `alertas[]`.
 //    4. git push a GitHub Pages.
 //
-//  FIX v8 (sobre v7):
-//    - FIX LOOKUP DE ZONA: antes se hacía CONFIG.MAPA_ZONAS[s.nombre]
-//      con el nombre COMPLETO de la tarjeta ("Campamento Yanacancha -
-//      (Nuevo Campamento, ...)"), pero MAPA_ZONAS usa claves CORTAS
-//      ("Campamento Yanacancha"). El lookup devolvía undefined y todas
-//      las alertas se descartaban con "continue" -> alertas[] siempre
-//      vacío. Ahora se usa coincidencia PARCIAL (buscarZona), igual
-//      que ya se hace con SECTORES_ESPERADOS.
+//  FIX v9 (sobre v8) — HORAS DE INICIO/FIN:
+//    - FIX ZONA HORARIA (el bug de las "horas erróneas"):
+//        Antes:  Date.parse("2026-10-05 13:23:17".replace(" ","T"))
+//                -> se interpretaba en la zona horaria DEL SERVIDOR.
+//        Como Keraunos publica en hora de Perú (UTC-5), en un server
+//        UTC el timestamp salía 5 h desfasado (y con él el contador
+//        "Restante" y la barra "Hace X" del frontend).
+//        Ahora:  parseFechaKeraunos() construye el instante UTC
+//                asumiendo CONFIG.TZ_OFFSET_MIN (Perú = -300),
+//                de modo que el resultado es idéntico sin importar
+//                la TZ del servidor.
 //
-//  FIX v7 (mantenido):
-//    - Eliminado "git stash --include-untracked".
-//    - Solo se usa "git pull --rebase --autostash".
-//    - "git add -f" para forzar el add.
+//    - FIX EXTRACCIÓN ROBUSTA:
+//        Antes el regex exigía EXACTAMENTE "YYYY-MM-DD HH:MM:SS" y
+//        las etiquetas "inicio"/"fin"; si la página cambiaba de
+//        formato (sin segundos, separador "T", etiqueta distinta)
+//        devolvía null EN SILENCIO.
+//        Ahora extraerFechaDeTexto() acepta variantes y se añade
+//        un log de aviso cuando un sector con alerta no trae horas.
+//
+//  FIX v8 (mantenido): coincidencia PARCIAL de zona (buscarZona).
+//  FIX v7 (mantenido): sin "git stash"; solo "git pull --rebase
+//                      --autostash"; "git add -f".
 // ============================================================
 
 const { exec } = require('child_process');
@@ -32,6 +42,12 @@ const URL = CONFIG.URL;
 const ARCHIVO_LOG = CONFIG.ARCHIVO_LOG;
 const ARCHIVO_JSON = CONFIG.ARCHIVO_JSON;
 const INTERVALO = CONFIG.INTERVALO;
+
+// Zona horaria de las horas de Keraunos (Perú = UTC-5 => -300 min).
+// Se puede sobreescribir desde config.js con TZ_OFFSET_MIN.
+const TZ_OFFSET_MIN = (typeof CONFIG.TZ_OFFSET_MIN === "number")
+    ? CONFIG.TZ_OFFSET_MIN
+    : -300;
 
 // ------------------------------------------------------------
 //  Mapa de niveles -> color y número
@@ -55,6 +71,45 @@ function registrarLog(mensaje) {
 // ------------------------------------------------------------
 function normalizar(texto) {
     return (texto || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// ------------------------------------------------------------
+//  FIX v9: convierte "YYYY-MM-DD HH:MM:SS" (o "YYYY-MM-DDTHH:MM[:SS]")
+//  al instante UTC en ms, ASUMIENDO que la hora viene en la zona
+//  horaria TZ_OFFSET_MIN (Perú = -300). Independiente de la TZ del
+//  servidor. Devuelve NaN si no se puede parsear.
+// ------------------------------------------------------------
+function parseFechaKeraunos(texto) {
+    if (!texto) return NaN;
+    const m = String(texto).match(
+        /(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/
+    );
+    if (!m) return NaN;
+    const Y  = Number(m[1]);
+    const Mo = Number(m[2]);
+    const D  = Number(m[3]);
+    const H  = Number(m[4]);
+    const Mi = Number(m[5]);
+    const S  = m[6] ? Number(m[6]) : 0;
+
+    // Date.UTC(...) da el instante como si fuera UTC; restamos el
+    // offset (offset negativo = por detrás de UTC => sumamos horas).
+    return Date.UTC(Y, Mo - 1, D, H, Mi, S) - TZ_OFFSET_MIN * 60000;
+}
+
+// ------------------------------------------------------------
+//  FIX v9: extrae y normaliza una fecha "YYYY-MM-DD HH:MM:SS" de un
+//  texto cualquiera. Acepta separador espacio o "T" y segundos
+//  opcionales (los añade si faltan). Devuelve null si no hay fecha.
+// ------------------------------------------------------------
+function extraerFechaDeTexto(texto) {
+    const m = String(texto || "").match(
+        /(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)/
+    );
+    if (!m) return null;
+    let hora = m[2];
+    if (hora.length === 5) hora += ":00"; // "HH:MM" -> "HH:MM:SS"
+    return `${m[1]} ${hora}`;
 }
 
 // ------------------------------------------------------------
@@ -89,29 +144,43 @@ function detectarNivelDeTarjeta($, el) {
 }
 
 // ------------------------------------------------------------
-//  Extrae hora de INICIO y FIN de UNA tarjeta
+//  FIX v9: extrae hora de INICIO y FIN de UNA tarjeta.
+//  - Acepta variantes de formato (con/sin segundos, "T" o espacio).
+//  - Acepta variantes de etiqueta (inicio/inicia/desde/comienzo y
+//    fin/final/hasta/término/previsto).
+//  - Si no hay etiqueta, usa el orden (1ª fecha = inicio, 2ª = fin).
 // ------------------------------------------------------------
 function extraerHorasDeTarjeta($, el) {
     const $el = $(el);
     let inicio = null;
     let fin = null;
+    const sinEtiqueta = [];
 
     $el.find('.small-text').each((i, p) => {
         const texto = $(p).text().trim();
-        const m = texto.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
-        if (!m) return;
-        const valor = m[1];
-        if (/inicio/i.test(texto)) inicio = valor;
-        else if (/fin/i.test(texto)) fin = valor;
+        const valor = extraerFechaDeTexto(texto);
+        if (!valor) return;
+
+        const t = texto.toLowerCase();
+        const esInicio = /inicio|inicia|desde|comienz/.test(t);
+        const esFin    = /fin|final|hasta|termin|previst/.test(t);
+
+        if (esInicio && !esFin)      inicio = valor;
+        else if (esFin && !esInicio) fin = valor;
+        else                         sinEtiqueta.push(valor);
     });
+
+    // Fallback: si no hubo etiquetas reconocibles, asumir orden.
+    if (inicio === null && fin === null && sinEtiqueta.length > 0) {
+        inicio = sinEtiqueta[0] || null;
+        fin    = sinEtiqueta[1] || null;
+    }
 
     return { inicio, fin };
 }
 
 // ------------------------------------------------------------
 //  FIX v8: busca la zona por COINCIDENCIA PARCIAL del nombre.
-//  El nombre de la tarjeta es largo ("Campamento Yanacancha - (...)")
-//  y las claves de MAPA_ZONAS son cortas ("Campamento Yanacancha").
 // ------------------------------------------------------------
 function buscarZona(nombre) {
     const norm = normalizar(nombre);
@@ -144,6 +213,14 @@ async function consultarKeraunos() {
 
             const nivel = detectarNivelDeTarjeta($, el);
             const { inicio, fin } = extraerHorasDeTarjeta($, el);
+
+            // FIX v9: aviso si hay alerta pero no se pudieron leer las horas.
+            if (nivel !== "VERDE" && (!inicio || !fin)) {
+                registrarLog(
+                    `Aviso: sector con alerta ${nivel} pero sin horas legibles -> ` +
+                    `${nombre.substring(0, 60)} (inicio=${inicio}, fin=${fin})`
+                );
+            }
 
             sectoresEnPagina.push({ nombre, nivel, inicio, fin });
         });
@@ -217,8 +294,10 @@ async function consultarKeraunos() {
 }
 
 // ------------------------------------------------------------
-//  Calcula duración y timestampInicio desde las horas
-//  de la tarjeta. Si no hay hora de fin, usa DURACION_DEFAULT_MIN.
+//  FIX v9: calcula duración y timestampInicio desde las horas
+//  de la tarjeta, interpretándolas SIEMPRE en hora de Perú
+//  (CONFIG.TZ_OFFSET_MIN). Si no hay hora de fin, usa
+//  DURACION_DEFAULT_MIN.
 // ------------------------------------------------------------
 function calcularDuracion(sector) {
     const defMin = CONFIG.DURACION_DEFAULT_MIN || 15;
@@ -227,13 +306,13 @@ function calcularDuracion(sector) {
         return { duracionMin: defMin, timestampInicio: Date.now() };
     }
 
-    const inicioMs = Date.parse(sector.inicio.replace(" ", "T"));
+    const inicioMs = parseFechaKeraunos(sector.inicio);
     if (isNaN(inicioMs)) {
         return { duracionMin: defMin, timestampInicio: Date.now() };
     }
 
     if (sector.fin) {
-        const finMs = Date.parse(sector.fin.replace(" ", "T"));
+        const finMs = parseFechaKeraunos(sector.fin);
         if (!isNaN(finMs) && finMs > inicioMs) {
             const min = Math.round((finMs - inicioMs) / 60000);
             return { duracionMin: Math.max(1, min), timestampInicio: inicioMs };
@@ -252,7 +331,6 @@ function guardarJSON(estadoGlobal, sectores) {
     for (const s of sectores) {
         if (s.nivel === "VERDE") continue;
 
-        // FIX v8: coincidencia parcial en lugar de CONFIG.MAPA_ZONAS[s.nombre]
         const zona = buscarZona(s.nombre);
         if (!zona) {
             registrarLog(`Aviso: sector sin zona mapeada, se omite alerta -> ${s.nombre}`);
@@ -331,17 +409,6 @@ function procesarResultado(resultado) {
 
 // ------------------------------------------------------------
 //  Sube estado.json a GitHub (FIX v7)
-//  ------------------------------------------------------------
-//  NO usa "git stash" porque guardaría estado.json (untracked) y
-//  luego el "git add" fallaría con "pathspec did not match".
-//
-//  Secuencia:
-//    1. git pull --rebase --autostash  (integra cambios remotos)
-//    2. git add -f estado.json         (force, por si algo lo ignora)
-//    3. git commit -m "..."
-//    4. git push origin main
-//
-//  Si falla, se aborta cualquier rebase a medias y se loguea.
 // ------------------------------------------------------------
 function subirAGithub() {
     const archivos = [ARCHIVO_JSON].join(" ");
@@ -366,7 +433,7 @@ function subirAGithub() {
 //  Ciclo principal
 // ------------------------------------------------------------
 async function cicloPrincipal() {
-    registrarLog(`Monitor Keraunos iniciado. Intervalo: ${INTERVALO / 1000}s`);
+    registrarLog(`Monitor Keraunos iniciado. Intervalo: ${INTERVALO / 1000}s | TZ Keraunos: UTC${TZ_OFFSET_MIN / 60}`);
 
     procesarResultado(await consultarKeraunos());
 
@@ -379,6 +446,8 @@ module.exports = {
     consultarKeraunos,
     detectarNivelDeTarjeta,
     extraerHorasDeTarjeta,
+    extraerFechaDeTexto,
+    parseFechaKeraunos,
     buscarZona,
     guardarJSON,
     calcularDuracion,
@@ -389,4 +458,3 @@ module.exports = {
 if (require.main === module) {
     cicloPrincipal();
 }
-

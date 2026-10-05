@@ -1,16 +1,13 @@
 // config.js
 // ============================================================
-// Configuración del Monitor Keraunos — Scraper Termux
+// Configuración del Monitor Keraunos — Scraper
 // ============================================================
 
 module.exports = {
 
     // --------------------------------------------------------
-    //  FIX: la URL debe ser la FUENTE REAL de Keraunos.
-    //  Antes apuntaba a "https://antito-yanac.github.io/antito-yanac-test/"
-    //  que es la SALIDA del propio scraper (referencia circular):
-    //  esa página usa .sector-box, pero el scraper busca
-    //  .card.card-activo -> 0 coincidencias -> todo salía VERDE.
+    //  URL FUENTE REAL de Keraunos (la página con las tarjetas
+    //  .card.card-activo y los <p class="small-text">).
     // --------------------------------------------------------
     URL: "https://qr.keraunos.co/t/mHMsMSjw7fLzlVFzMsh9K99cFG7tiC",
 
@@ -20,6 +17,17 @@ module.exports = {
     INTERVALO: 60 * 1000,
 
     SUBIR_A_GITHUB: true,
+
+    // --------------------------------------------------------
+    //  NUEVO (FIX v9): zona horaria en la que Keraunos publica
+    //  las horas "Inicio/Fin de alerta". Keraunos usa hora de
+    //  Perú (UTC-5). Se expresa en MINUTOS respecto a UTC.
+    //     Perú  = -300
+    //     UTC   =    0
+    //  Esto hace que `timestampInicio` sea correcto SIN importar
+    //  en qué zona horaria corra el servidor.
+    // --------------------------------------------------------
+    TZ_OFFSET_MIN: -300,
 
     SECTORES_ESPERADOS: [
         "Campamento Yanacancha",
@@ -48,4 +56,3 @@ module.exports = {
 
     DURACION_DEFAULT_MIN: 15
 };
-
