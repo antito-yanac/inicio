@@ -1,5 +1,5 @@
 {
-  "actualizado": "2026-10-05T18:31:57.431Z",
+  "actualizado": "2026-10-05T18:32:57.007Z",
   "estadoGlobal": "ROJA",
   "estadoGlobalNumero": 3,
   "totalSectores": 4,
@@ -16,7 +16,7 @@
       "nivelNumero": 2,
       "color": "#FF8C00",
       "inicio": "2026-10-05 13:23:17",
-      "fin": "2026-10-05 13:53:17"
+      "fin": "2026-10-05 14:02:25"
     },
     {
       "nombre": "Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado)",
@@ -24,7 +24,7 @@
       "nivelNumero": 2,
       "color": "#FF8C00",
       "inicio": "2026-10-05 13:18:34",
-      "fin": "2026-10-05 13:55:23"
+      "fin": "2026-10-05 14:02:25"
     },
     {
       "nombre": "Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa)",
@@ -32,7 +32,7 @@
       "nivelNumero": 3,
       "color": "#FA5858",
       "inicio": "2026-10-05 13:26:14",
-      "fin": "2026-10-05 13:56:14"
+      "fin": "2026-10-05 14:02:25"
     },
     {
       "nombre": "Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
@@ -40,7 +40,7 @@
       "nivelNumero": 3,
       "color": "#FA5858",
       "inicio": "2026-10-05 13:26:14",
-      "fin": "2026-10-05 13:56:14"
+      "fin": "2026-10-05 14:02:25"
     }
   ],
   "alertas": [
@@ -51,14 +51,14 @@
       "distrito": "Zona 1 - Campamentos",
       "lat": -9.5822364,
       "lng": -77.02231,
-      "duracionMin": 30,
+      "duracionMin": 39,
       "timestampInicio": 1791224597000,
       "inicio": "2026-10-05 13:23:17",
-      "fin": "2026-10-05 13:53:17",
+      "fin": "2026-10-05 14:02:25",
       "color": "#FF8C00",
       "emoji": "🟠",
       "titulo": "⚡ ALERTA NARANJA — Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha)",
-      "mensaje": "Actividad eléctrica detectada en Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha) (Zona 1 - Campamentos). Nivel NARANJA. Inicio: 2026-10-05 13:23:17. Fin previsto: 2026-10-05 13:53:17."
+      "mensaje": "Actividad eléctrica detectada en Campamento Yanacancha - (Nuevo Campamento, Descarga Norte Presa Relaves, Polishing Pond, Garita Laguna Huallacocha, Garita plataforma km 114, Tailing Dam Norte - Punto Y, Garita Portón Principal, Grifo Yanacancha) (Zona 1 - Campamentos). Nivel NARANJA. Inicio: 2026-10-05 13:23:17. Fin previsto: 2026-10-05 14:02:25."
     },
     {
       "sectorOriginal": "Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado)",
@@ -67,14 +67,14 @@
       "distrito": "Zona 2 - Botadero Este",
       "lat": -9.5718388,
       "lng": -77.0447182,
-      "duracionMin": 37,
+      "duracionMin": 44,
       "timestampInicio": 1791224314000,
       "inicio": "2026-10-05 13:18:34",
-      "fin": "2026-10-05 13:55:23",
+      "fin": "2026-10-05 14:02:25",
       "color": "#FF8C00",
       "emoji": "🟠",
       "titulo": "⚡ ALERTA NARANJA — Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado)",
-      "mensaje": "Actividad eléctrica detectada en Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado) (Zona 2 - Botadero Este). Nivel NARANJA. Inicio: 2026-10-05 13:18:34. Fin previsto: 2026-10-05 13:55:23."
+      "mensaje": "Actividad eléctrica detectada en Oficinas Mina - (Grifo 4448, Punto E, Ingreso Laguna Seca, Nasa, Oficinas Mina, Concentradora, Plataforma Pre PM, Presa Relaves, Plataforma de Armado) (Zona 2 - Botadero Este). Nivel NARANJA. Inicio: 2026-10-05 13:18:34. Fin previsto: 2026-10-05 14:02:25."
     },
     {
       "sectorOriginal": "Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa)",
@@ -83,14 +83,14 @@
       "distrito": "Zona 3 - Tucush",
       "lat": -9.5263487,
       "lng": -77.0485794,
-      "duracionMin": 30,
+      "duracionMin": 36,
       "timestampInicio": 1791224774000,
       "inicio": "2026-10-05 13:26:14",
-      "fin": "2026-10-05 13:56:14",
+      "fin": "2026-10-05 14:02:25",
       "color": "#FA5858",
       "emoji": "🔴",
       "titulo": "⚡ ALERTA ROJA — Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa)",
-      "mensaje": "Actividad eléctrica detectada en Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa) (Zona 3 - Tucush). Nivel ROJA. Inicio: 2026-10-05 13:26:14. Fin previsto: 2026-10-05 13:56:14."
+      "mensaje": "Actividad eléctrica detectada en Tucush  - (CTC Tucush, Truck Shop, Rosita de Oro, Taller eléctrico Mina, Polvorines 1 y 2, Botadero Tucush, Espaldón de Presa) (Zona 3 - Tucush). Nivel ROJA. Inicio: 2026-10-05 13:26:14. Fin previsto: 2026-10-05 14:02:25."
     },
     {
       "sectorOriginal": "Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
@@ -99,14 +99,14 @@
       "distrito": "Zona 4 - Tajo",
       "lat": -9.5416465,
       "lng": -77.0707659,
-      "duracionMin": 30,
+      "duracionMin": 36,
       "timestampInicio": 1791224774000,
       "inicio": "2026-10-05 13:26:14",
-      "fin": "2026-10-05 13:56:14",
+      "fin": "2026-10-05 14:02:25",
       "color": "#FA5858",
       "emoji": "🔴",
       "titulo": "⚡ ALERTA ROJA — Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
-      "mensaje": "Actividad eléctrica detectada en Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria) (Zona 4 - Tajo). Nivel ROJA. Inicio: 2026-10-05 13:26:14. Fin previsto: 2026-10-05 13:56:14."
+      "mensaje": "Actividad eléctrica detectada en Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria) (Zona 4 - Tajo). Nivel ROJA. Inicio: 2026-10-05 13:26:14. Fin previsto: 2026-10-05 14:02:25."
     }
   ]
 }
