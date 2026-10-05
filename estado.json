@@ -1,5 +1,5 @@
 {
-  "actualizado": "2026-10-05T21:38:30.262Z",
+  "actualizado": "2026-10-05T21:39:30.544Z",
   "estadoGlobal": "ROJA",
   "estadoGlobalNumero": 3,
   "totalSectores": 4,
@@ -40,7 +40,7 @@
       "nivelNumero": 3,
       "color": "#FA5858",
       "inicio": "2026-10-05 16:21:30",
-      "fin": "2026-10-05 17:02:47"
+      "fin": "2026-10-05 17:07:58"
     }
   ],
   "alertas": [
@@ -99,14 +99,14 @@
       "distrito": "Zona 4 - Tajo",
       "lat": -9.5416465,
       "lng": -77.0707659,
-      "duracionMin": 41,
+      "duracionMin": 46,
       "timestampInicio": 1791235290000,
       "inicio": "2026-10-05 16:21:30",
-      "fin": "2026-10-05 17:02:47",
+      "fin": "2026-10-05 17:07:58",
       "color": "#FA5858",
       "emoji": "🔴",
       "titulo": "⚡ ALERTA ROJA — Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria)",
-      "mensaje": "Actividad eléctrica detectada en Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria) (Zona 4 - Tajo). Nivel ROJA. Inicio: 2026-10-05 16:21:30. Fin previsto: 2026-10-05 17:02:47."
+      "mensaje": "Actividad eléctrica detectada en Tajo - (Fase 7-8-9-10, Rampa Sur, Quebrada Antamina, Chancadora primaria) (Zona 4 - Tajo). Nivel ROJA. Inicio: 2026-10-05 16:21:30. Fin previsto: 2026-10-05 17:07:58."
     }
   ]
 }
