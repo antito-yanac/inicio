@@ -1,7 +1,8 @@
 // js/map.js
 // ============================================================
 //  Mapa Leaflet — Antamina
-//  v6: listener de ubicación robusto (click + touchend)
+//  v7: fitBounds en pintarPoligonoZona (encuadra la zona completa)
+//      + listener robusto de ubicación (click + touchend)
 // ============================================================
 
 let map;
@@ -38,7 +39,7 @@ let zonasData = null;
 
 
 // ======================================================
-// ILUMINAR DISTRITO
+// ILUMINAR DISTRITO (rayo + círculo + pulso sobre un punto)
 // ======================================================
 export function iluminarDistrito(lat, lng, nivelKey = "roja") {
     if (!map) return null;
@@ -257,7 +258,6 @@ export function crearMapa(idDiv) {
 
     map.setView([-9.50, -77.00], 9);
 
-    // 👇 Listener robusto para el botón de ubicación
     engancharBotonUbicacion();
 
     return { cargarGeoJSON, irA, limpiarSeleccion, filtrarLugares };
@@ -282,14 +282,12 @@ function engancharBotonUbicacion() {
 
     if (btnUbicacion.dataset.listener === "1") return;
 
-    // Click normal
     btnUbicacion.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
         mostrarMiUbicacion();
     });
 
-    // Respaldo para móviles que no disparan click en SVG
     btnUbicacion.addEventListener("touchend", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -317,11 +315,10 @@ function mostrarMiUbicacion() {
 
     if (btn) btn.classList.add("buscar");
 
-    // 👇 Opciones más tolerantes para móvil
     const options = {
         enableHighAccuracy: true,
-        timeout: 20000,        // 20s en vez de 15s
-        maximumAge: 30000      // aceptar posición cacheada de hasta 30s
+        timeout: 20000,
+        maximumAge: 30000
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -520,7 +517,7 @@ async function cargarZonas() {
 
 
 // ======================================================
-// PINTAR POLÍGONO DE ZONA
+// PINTAR POLÍGONO DE ZONA — v7 con fitBounds
 // ======================================================
 export async function pintarPoligonoZona(nombreZona, color = "#e74c3c") {
     if (!map) return null;
@@ -554,6 +551,18 @@ export async function pintarPoligonoZona(nombreZona, color = "#e74c3c") {
     );
 
     poligonosActivos.set(zona.nombre, { poligono, color });
+
+    // FIX 4: encuadrar la zona completa SOLO la primera vez
+    // (cuando se pinta el primer polígono). Las siguientes zonas
+    // respetan el zoom actual para no marear al usuario.
+    if (poligonosActivos.size === 1) {
+        try {
+            map.fitBounds(poligono.getBounds(), {
+                padding: [40, 40],
+                maxZoom: 13
+            });
+        } catch (e) {}
+    }
 
     return {
         zona, poligono,
