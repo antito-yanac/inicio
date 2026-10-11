@@ -1,17 +1,17 @@
 // js/alertas.js
 //
 // ============================================================
-// Sistema de Alerta Meteorológica — v3.3
+// Sistema de Alerta Meteorológica — v3.4
 // ------------------------------------------------------------
-// - Soporta MÚLTIPLES zonas activas simultáneamente.
-// - Cola FIFO de banners (uno por zona, secuencial).
-// - Barra superior y tarjeta flotante AGREGADAS (resumen).
-// - Maneja "alerta-resuelta" (quita una zona específica).
-// - Cuando todas las zonas vuelven a VERDE → "Libre de alertas".
-// - Cada zona tiene su propio contador sincronizado.
-// - Mapa: N polígonos + N rayos (delegado a map.js v7).
-// - Click en barra superior reabre el overlay.
-// - La tarjeta agregada muestra tiempo restante por zona.
+// v3.4 (fix): CONTADOR MAESTRO ÚNICO.
+//   - Antes: cada banner tenía su propio setInterval, y
+//     cerrarBannerActual() detenía el contador. Resultado: al
+//     cerrar el overlay, la zona nunca expiraba y la barra/
+//     tarjeta quedaban congeladas.
+//   - Ahora: un solo interval (intervalMaestro) corre siempre
+//     que haya zonas activas, independiente de si el banner
+//     está visible o no. Revisa todas las zonas cada segundo,
+//     quita las expiradas y refresca la UI.
 // ============================================================
 
 import { reproducirSonidoAlerta, detenerSonidoAlerta } from "./notifications.js";
@@ -21,45 +21,29 @@ import { reproducirSonidoAlerta, detenerSonidoAlerta } from "./notifications.js"
 // ----------------------------------------------------------
 export const NIVELES_ALERTA = {
     vigilancia: {
-        nombre: "Vigilancia",
-        color: "#2ecc71",
-        colorDark: "#27ae60",
-        glow: "rgba(46,204,113,0.6)",
-        icono: "🟢",
-        iconoBig: "🌩️",
+        nombre: "Vigilancia", color: "#2ecc71", colorDark: "#27ae60",
+        glow: "rgba(46,204,113,0.6)", icono: "🟢", iconoBig: "🌩️",
         descripcion: "Actividad eléctrica lejana.",
         recomendacion: "Manténgase informado sobre el desarrollo del clima.",
         orden: 0
     },
     amarilla: {
-        nombre: "Alerta amarilla",
-        color: "#f1c40f",
-        colorDark: "#c9a003",
-        glow: "rgba(241,196,15,0.6)",
-        icono: "🟡",
-        iconoBig: "⚡",
+        nombre: "Alerta amarilla", color: "#f1c40f", colorDark: "#c9a003",
+        glow: "rgba(241,196,15,0.6)", icono: "🟡", iconoBig: "⚡",
         descripcion: "Posibles descargas eléctricas en la zona.",
         recomendacion: "Manténgase atento a la evolución de la actividad eléctrica.",
         orden: 1
     },
     naranja: {
-        nombre: "Alerta naranja",
-        color: "#e67e22",
-        colorDark: "#b9530f",
-        glow: "rgba(230,126,34,0.65)",
-        icono: "🟠",
-        iconoBig: "⚡",
+        nombre: "Alerta naranja", color: "#e67e22", colorDark: "#b9530f",
+        glow: "rgba(230,126,34,0.65)", icono: "🟠", iconoBig: "⚡",
         descripcion: "Actividad eléctrica cercana.",
         recomendacion: "Evite actividades al aire libre.",
         orden: 2
     },
     roja: {
-        nombre: "Alerta roja",
-        color: "#e74c3c",
-        colorDark: "#c0392b",
-        glow: "rgba(231,76,60,0.7)",
-        icono: "🔴",
-        iconoBig: "⚡",
+        nombre: "Alerta roja", color: "#e74c3c", colorDark: "#c0392b",
+        glow: "rgba(231,76,60,0.7)", icono: "🔴", iconoBig: "⚡",
         descripcion: "Actividad eléctrica muy cercana.",
         recomendacion: "Refúgiese inmediatamente.",
         orden: 3
@@ -114,19 +98,15 @@ const SVG_RAYO = `
 // ESTADO INTERNO
 // ----------------------------------------------------------
 const estado = {
-    zonasActivas: new Map(),
+    zonasActivas: new Map(),    // distrito -> { nivel, nivelKey, timestampInicio, duracionMin, ... }
     colaBanners: [],
     bannerActual: null,
-    intervalContador: null,
-    intervalTimestamp: null,
-    intervalTiempos: null
+    intervalMaestro: null,
+    intervalTimestamp: null
 };
 
-// Mapa de capas de rayo/círculo por distrito (FIX 1)
-const capasRayos = new Map();
-
+const capasRayos = new Map();  // distrito -> capaMapa
 let libreYaCerradoPorUsuario = false;
-
 const DURACION_TIMER_MINUTOS = 15;
 
 // ----------------------------------------------------------
@@ -239,42 +219,107 @@ async function obtenerModuloMapa() {
 }
 
 // ==========================================================
+// CONTADOR MAESTRO (un único interval para todas las zonas)
+// ==========================================================
+function iniciarIntervalMaestro() {
+    if (estado.intervalMaestro !== null) return;
+    estado.intervalMaestro = setInterval(tickMaestro, 1000);
+    console.log("[alertas] interval maestro iniciado");
+}
+
+function detenerIntervalMaestro() {
+    if (estado.intervalMaestro !== null) {
+        clearInterval(estado.intervalMaestro);
+        estado.intervalMaestro = null;
+    }
+}
+
+async function tickMaestro() {
+    const ahora = Date.now();
+
+    // 1. Detectar zonas expiradas
+    const expiradas = [];
+    for (const [distrito, zona] of estado.zonasActivas.entries()) {
+        const finMs = zona.timestampInicio + zona.duracionMin * 60 * 1000;
+        if (ahora >= finMs) expiradas.push(distrito);
+    }
+
+    // 2. Quitarlas
+    for (const distrito of expiradas) {
+        try { await quitarAlerta(distrito); } catch (e) { /* log interno */ }
+    }
+
+    // 3. Si ya no quedan zonas → detener el interval
+    if (estado.zonasActivas.size === 0) {
+        detenerIntervalMaestro();
+        return;
+    }
+
+    // 4. Actualizar contador visible del banner actual
+    if (estado.bannerActual) {
+        const zona = estado.zonasActivas.get(estado.bannerActual);
+        if (zona) {
+            const finMs = zona.timestampInicio + zona.duracionMin * 60 * 1000;
+            let restante = Math.ceil((finMs - ahora) / 1000);
+            if (restante < 0) restante = 0;
+            const el = document.getElementById("al-contador");
+            if (el) {
+                el.textContent = formatearTiempo(restante);
+                if (restante <= 60) el.classList.add("al-critico");
+                else el.classList.remove("al-critico");
+            }
+        }
+    }
+
+    // 5. Refrescar barra/tarjeta agregada (tiempos por zona)
+    actualizarBarraYTarjetaAgregadas();
+}
+
+function formatearTiempo(segundos) {
+    if (segundos < 0) segundos = 0;
+    const h = Math.floor(segundos / 3600);
+    const m = Math.floor((segundos % 3600) / 60);
+    const s = segundos % 60;
+    return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
+}
+
+function tiempoRestanteZona(zona) {
+    const finMs = zona.timestampInicio + zona.duracionMin * 60 * 1000;
+    const restante = Math.ceil((finMs - Date.now()) / 1000);
+    return restante > 0 ? restante : 0;
+}
+
+// ==========================================================
 // MOSTRAR ALERTA COMPLETA
 // ==========================================================
 export async function mostrarAlertaCompleta(datos = {}) {
     try {
         libreYaCerradoPorUsuario = false;
-
         asegurarEstructuraDOM();
 
         const nivelKey = NIVELES_ALERTA[datos.nivel] ? datos.nivel : "roja";
         const distrito = datos.distrito || `Zona ${estado.zonasActivas.size + 1}`;
-
         const duracionMin = (datos.duracionMin && datos.duracionMin > 0)
-            ? datos.duracionMin
-            : DURACION_TIMER_MINUTOS;
-
+            ? datos.duracionMin : DURACION_TIMER_MINUTOS;
         const tsInicio = (typeof datos.timestampInicio === "number" && datos.timestampInicio > 0)
-            ? datos.timestampInicio
-            : Date.now();
+            ? datos.timestampInicio : Date.now();
 
         const yaExistia = estado.zonasActivas.has(distrito);
+
         estado.zonasActivas.set(distrito, {
-            nivel: nivelKey,
-            nivelKey,
-            distrito,
-            lat: datos.lat ?? null,
-            lng: datos.lng ?? null,
-            duracionMin,
-            timestampInicio: tsInicio,
+            nivel: nivelKey, nivelKey, distrito,
+            lat: datos.lat ?? null, lng: datos.lng ?? null,
+            duracionMin, timestampInicio: tsInicio,
             sectorOriginal: datos.sectorOriginal || null,
-            inicio: datos.inicio || null,
-            fin: datos.fin || null,
+            inicio: datos.inicio || null, fin: datos.fin || null,
             titulo: datos.titulo || `⚡ ALERTA ${nivelKey.toUpperCase()} — ${distrito}`,
             mensaje: datos.mensaje || `Actividad eléctrica detectada en ${distrito}.`
         });
 
-        // Pintar polígono
+        // Arrancar el contador maestro en cuanto haya una zona
+        iniciarIntervalMaestro();
+
+        // Pintar polígono del mapa
         if (datos.distrito) {
             const mod = await obtenerModuloMapa();
             if (mod && typeof mod.pintarPoligonoZona === "function") {
@@ -283,11 +328,10 @@ export async function mostrarAlertaCompleta(datos = {}) {
             }
         }
 
-        // FIX 1: rayo con capa guardada por distrito
+        // Rayo + círculo (solo si es nueva la zona)
         if (!yaExistia && datos.lat != null && datos.lng != null) {
             const mod = await obtenerModuloMapa();
             if (mod && typeof mod.iluminarDistrito === "function") {
-                // Si ya había una capa para esta zona, destruirla
                 if (capasRayos.has(distrito)) {
                     try { capasRayos.get(distrito).detener(); } catch (e) {}
                     capasRayos.delete(distrito);
@@ -297,7 +341,7 @@ export async function mostrarAlertaCompleta(datos = {}) {
             }
         }
 
-        // Añadir a la cola si es nueva
+        // Cola de banners
         if (!yaExistia) {
             estado.colaBanners.push(distrito);
             estado.colaBanners.sort((a, b) => {
@@ -341,44 +385,42 @@ export async function quitarAlerta(distrito) {
                 break;
             }
         }
-
         if (!distritoReal) return false;
 
-        // 1) Quitar polígono
+        // Polígono
         const mod = await obtenerModuloMapa();
         if (mod && typeof mod.quitarPoligonoZona === "function") {
             mod.quitarPoligonoZona(distritoReal);
         }
 
-        // 1.5) FIX 1: quitar capa del rayo
+        // Rayo
         if (capasRayos.has(distritoReal)) {
             try { capasRayos.get(distritoReal).detener(); } catch (e) {}
             capasRayos.delete(distritoReal);
         }
 
-        // 2) Quitar del estado
+        // Estado
         estado.zonasActivas.delete(distritoReal);
-
-        // 3) Quitar de la cola
         estado.colaBanners = estado.colaBanners.filter(d => d !== distritoReal);
 
-        // 4) Si era el banner actual
+        // Si era el banner actual
         if (estado.bannerActual === distritoReal) {
             estado.bannerActual = null;
+            cerrarBanner();
             if (estado.colaBanners.length > 0) {
                 mostrarSiguienteBanner();
-            } else if (estado.zonasActivas.size === 0) {
-                mostrarAlertaLibre();
-            } else {
-                cerrarBanner();
-                actualizarBarraYTarjetaAgregadas();
             }
         } else {
             actualizarIndicadorCola();
         }
 
-        // 5) Actualizar barra/tarjeta
-        if (estado.zonasActivas.size > 0) {
+        // Si ya no quedan zonas → libre de alertas
+        if (estado.zonasActivas.size === 0) {
+            detenerIntervalMaestro();
+            detenerSonidoAlerta();
+            mostrarAlertaLibre();
+        } else {
+            // Refrescar barra/tarjeta con las zonas restantes
             actualizarBarraYTarjetaAgregadas();
         }
 
@@ -405,10 +447,7 @@ function mostrarSiguienteBanner() {
 
     const distrito = estado.colaBanners.shift();
     const zona = estado.zonasActivas.get(distrito);
-    if (!zona) {
-        mostrarSiguienteBanner();
-        return;
-    }
+    if (!zona) { mostrarSiguienteBanner(); return; }
 
     estado.bannerActual = distrito;
     pintarBannerDeZona(zona);
@@ -418,21 +457,18 @@ function mostrarSiguienteBanner() {
 function actualizarIndicadorCola() {
     const el = document.getElementById("al-cola-indicador");
     if (!el) return;
-
     const pendientes = estado.colaBanners.length;
     if (pendientes === 0) {
         el.style.display = "none";
         el.textContent = "";
         return;
     }
-
     el.style.display = "block";
     el.textContent = `+ ${pendientes} zona${pendientes > 1 ? "s" : ""} en alerta`;
 }
 
 function pintarBannerDeZona(zona) {
     const nivel = NIVELES_ALERTA[zona.nivelKey];
-
     const vars = [
         ["--al-color", nivel.color],
         ["--al-color-dark", nivel.colorDark],
@@ -463,26 +499,33 @@ function pintarBannerDeZona(zona) {
 
     activarFlashFondo();
 
-    const duracionMs = zona.duracionMin * 60 * 1000;
-    iniciarContadorSincronizado(zona.timestampInicio, duracionMs, zona.distrito);
-    actualizarTimestampBarra(zona.timestampInicio);
+    // Contador visible: se llena en el primer tick del interval maestro
+    const wrap = document.getElementById("al-contador-wrap");
+    const el = document.getElementById("al-contador");
+    if (wrap) wrap.style.display = "block";
+    if (el) {
+        const restante = tiempoRestanteZona(zona);
+        el.textContent = formatearTiempo(restante);
+    }
 
+    actualizarTimestampBarra(zona.timestampInicio);
     setTimeout(() => document.getElementById("al-btn-cerrar")?.focus(), 800);
 }
 
 function cerrarBannerActual() {
-    const habiaZonas = estado.zonasActivas.size > 0;
-
+    // Cerrar el overlay visualmente, pero NO detener el interval maestro.
+    // La zona sigue activa y su contador sigue corriendo.
     cerrarBanner();
     estado.bannerActual = null;
-    detenerContador();
-    detenerSonidoAlerta();
 
+    // Pasar al siguiente banner si hay cola; si no, dejar la barra/tarjeta
     if (estado.colaBanners.length > 0) {
         setTimeout(() => mostrarSiguienteBanner(), 400);
-    } else if (habiaZonas) {
+    } else if (estado.zonasActivas.size > 0) {
+        // Actualizar la barra/tarjeta para reflejar zonas activas
         actualizarBarraYTarjetaAgregadas();
     } else {
+        // No quedan zonas → libre
         libreYaCerradoPorUsuario = true;
         mostrarBarraTarjetaLibre();
     }
@@ -494,12 +537,13 @@ function cerrarBanner() {
     overlay?.classList.remove("al-libre");
 }
 
+// ==========================================================
+// OVERLAY LIBRE
+// ==========================================================
 function abrirOverlayLibre() {
     try {
         asegurarEstructuraDOM();
-
         const nivel = NIVELES_ALERTA.vigilancia;
-
         const vars = [
             ["--al-color", nivel.color],
             ["--al-color-dark", nivel.colorDark],
@@ -541,34 +585,15 @@ function abrirOverlayLibre() {
 }
 
 // ==========================================================
-// BARRA SUPERIOR Y TARJETA AGREGADAS (FIX 3)
+// BARRA SUPERIOR Y TARJETA AGREGADAS
 // ==========================================================
-function formatearTiempoRestante(zona) {
-    const duracionMs = (zona.duracionMin || 15) * 60 * 1000;
-    const transcurrido = Date.now() - (zona.timestampInicio || Date.now());
-    let restante = Math.ceil((duracionMs - transcurrido) / 1000);
-    if (restante < 0) restante = 0;
-
-    const h = Math.floor(restante / 3600);
-    const m = Math.floor((restante % 3600) / 60);
-    const s = restante % 60;
-    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-}
-
 function actualizarBarraYTarjetaAgregadas() {
     const barra = document.getElementById("al-barra-superior");
     const tarjeta = document.getElementById("al-tarjeta");
     if (!barra || !tarjeta) return;
 
     const zonas = Array.from(estado.zonasActivas.values());
-
-    if (zonas.length === 0) {
-        if (estado.intervalTiempos) {
-            clearInterval(estado.intervalTiempos);
-            estado.intervalTiempos = null;
-        }
-        return;
-    }
+    if (zonas.length === 0) return;
 
     let nivelMax = NIVELES_ALERTA.vigilancia;
     for (const z of zonas) {
@@ -603,8 +628,7 @@ function actualizarBarraYTarjetaAgregadas() {
     } else {
         document.getElementById("al-barra-nivel").textContent =
             `${zonas.length} ZONAS EN ALERTA`;
-        const resumen = zonas
-            .slice()
+        const resumen = zonas.slice()
             .sort((a, b) => NIVELES_ALERTA[b.nivelKey].orden - NIVELES_ALERTA[a.nivelKey].orden)
             .map(z => {
                 const n = NIVELES_ALERTA[z.nivelKey];
@@ -628,107 +652,30 @@ function actualizarBarraYTarjetaAgregadas() {
         if (z.inicio)         cuerpo.push(`<strong>🕒 Inicio:</strong> ${z.inicio}`);
         if (z.fin)            cuerpo.push(`<strong>⏹️ Fin previsto:</strong> ${z.fin}`);
         cuerpo.push(`<strong>⚡ Nivel:</strong> ${n.nombre}`);
-        cuerpo.push(`<strong>⏰ Restante:</strong> ${formatearTiempoRestante(z)}`);
+        cuerpo.push(`<strong>⏰ Restante:</strong> ${formatearTiempo(tiempoRestanteZona(z))}`);
         document.getElementById("al-tarjeta-cuerpo").innerHTML = cuerpo.join("<br>");
-
-        // Detener intervalo de múltiples si existía
-        if (estado.intervalTiempos) {
-            clearInterval(estado.intervalTiempos);
-            estado.intervalTiempos = null;
-        }
-
     } else {
-        // FIX 3: múltiples zonas con tiempo individual
         document.getElementById("al-tarjeta-sub").textContent = `${zonas.length} ZONAS EN ALERTA`;
         document.getElementById("al-tarjeta-titulo").textContent = "Alerta múltiple";
-
-        const renderLineas = () => {
-            const ordenadas = estado.zonasActivas.size > 0
-                ? Array.from(estado.zonasActivas.values()).slice().sort((a, b) =>
-                    NIVELES_ALERTA[b.nivelKey].orden - NIVELES_ALERTA[a.nivelKey].orden
-                  )
-                : [];
-            const lineas = ordenadas.map(z => {
-                const n = NIVELES_ALERTA[z.nivelKey];
-                const tiempo = formatearTiempoRestante(z);
-                return `${n.icono} <strong>${z.distrito}</strong> — ${n.nombre}<br>⏰ Restante: ${tiempo}`;
-            });
-            const cuerpoEl = document.getElementById("al-tarjeta-cuerpo");
-            if (cuerpoEl) cuerpoEl.innerHTML = lineas.join("<br><br>");
-        };
-
-        renderLineas();
-
-        if (estado.intervalTiempos) clearInterval(estado.intervalTiempos);
-        estado.intervalTiempos = setInterval(() => {
-            if (estado.zonasActivas.size <= 1) {
-                clearInterval(estado.intervalTiempos);
-                estado.intervalTiempos = null;
-                // Repintar en modo single
-                actualizarBarraYTarjetaAgregadas();
-                return;
-            }
-            renderLineas();
-        }, 1000);
+        const ordenadas = zonas.slice().sort((a, b) =>
+            NIVELES_ALERTA[b.nivelKey].orden - NIVELES_ALERTA[a.nivelKey].orden
+        );
+        const lineas = ordenadas.map(z => {
+            const n = NIVELES_ALERTA[z.nivelKey];
+            const t = formatearTiempo(tiempoRestanteZona(z));
+            return `${n.icono} <strong>${z.distrito}</strong> — ${n.nombre}<br>⏰ Restante: ${t}`;
+        });
+        document.getElementById("al-tarjeta-cuerpo").innerHTML = lineas.join("<br><br>");
     }
     tarjeta.classList.add("al-visible");
 }
 
 // ==========================================================
-// CONTADOR SINCRONIZADO
+// TIMESTAMP BARRA
 // ==========================================================
-function iniciarContadorSincronizado(timestampInicio, duracionMs, distrito) {
-    const el = document.getElementById("al-contador");
-    const wrap = document.getElementById("al-contador-wrap");
-    if (!el || !wrap) return;
-    wrap.style.display = "block";
-
-    const formatear = (s) => {
-        if (s < 0) s = 0;
-        const h = Math.floor(s / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        const seg = s % 60;
-        return [h, m, seg].map(v => String(v).padStart(2, "0")).join(":");
-    };
-
-    const calcularRestante = () => {
-        const ahora = Date.now();
-        const transcurrido = ahora - timestampInicio;
-        return Math.ceil((duracionMs - transcurrido) / 1000);
-    };
-
-    detenerContador();
-
-    const actualizar = () => {
-        let restante = calcularRestante();
-        if (restante <= 0) {
-            el.textContent = "00:00:00";
-            el.classList.remove("al-critico");
-            detenerContador();
-            detenerSonidoAlerta();
-            quitarAlerta(distrito);
-            return;
-        }
-        el.textContent = formatear(restante);
-        if (restante <= 60) el.classList.add("al-critico");
-        else el.classList.remove("al-critico");
-    };
-
-    actualizar();
-    estado.intervalContador = setInterval(actualizar, 1000);
-}
-
-function detenerContador() {
-    if (estado.intervalContador) {
-        clearInterval(estado.intervalContador);
-        estado.intervalContador = null;
-    }
-}
-
 function actualizarTimestampBarra(timestampInicio) {
     const el = document.getElementById("al-barra-tiempo");
     if (!el) return;
-
     const actualizar = () => {
         if (!timestampInicio) return;
         const diff = Math.floor((Date.now() - timestampInicio) / 1000);
@@ -738,21 +685,18 @@ function actualizarTimestampBarra(timestampInicio) {
         else txt = `Hace ${Math.floor(diff / 3600)} h`;
         el.textContent = txt;
     };
-
     actualizar();
     if (estado.intervalTimestamp) clearInterval(estado.intervalTimestamp);
     estado.intervalTimestamp = setInterval(actualizar, 15000);
 }
 
 // ==========================================================
-// MOSTRAR BARRA + TARJETA "LIBRE DE ALERTAS"
+// BARRA + TARJETA LIBRE
 // ==========================================================
 export function mostrarBarraTarjetaLibre() {
     try {
         asegurarEstructuraDOM();
-
         const nivel = NIVELES_ALERTA.vigilancia;
-
         const vars = [
             ["--al-color", nivel.color],
             ["--al-color-dark", nivel.colorDark],
@@ -765,7 +709,6 @@ export function mostrarBarraTarjetaLibre() {
 
         const barra = document.getElementById("al-barra-superior");
         const tarjeta = document.getElementById("al-tarjeta");
-
         aplicarVars(barra);
         aplicarVars(tarjeta);
 
@@ -785,14 +728,13 @@ export function mostrarBarraTarjetaLibre() {
             "<strong>🟢 Estado:</strong> Sin alertas meteorológicas<br>" +
             "<strong>📍 Sistema:</strong> En vigilancia";
         tarjeta?.classList.add("al-visible");
-
     } catch (e) {
         console.error("alertas.js: error al mostrar barra/tarjeta libre", e);
     }
 }
 
 // ==========================================================
-// MOSTRAR ESTADO "LIBRE DE ALERTAS"
+// MOSTRAR LIBRE
 // ==========================================================
 export function mostrarAlertaLibre() {
     try {
@@ -803,20 +745,13 @@ export function mostrarAlertaLibre() {
         }
 
         asegurarEstructuraDOM();
-        detenerContador();
+        detenerIntervalMaestro();
         detenerSonidoAlerta();
 
-        // Limpiar capas de rayo
         for (const [, capa] of capasRayos.entries()) {
             try { capa.detener(); } catch (e) {}
         }
         capasRayos.clear();
-
-        // Detener interval de tiempos
-        if (estado.intervalTiempos) {
-            clearInterval(estado.intervalTiempos);
-            estado.intervalTiempos = null;
-        }
 
         obtenerModuloMapa().then(mod => {
             if (mod && typeof mod.limpiarPoligonosZona === "function") {
@@ -832,21 +767,19 @@ export function mostrarAlertaLibre() {
         mostrarBarraTarjetaLibre();
 
         setTimeout(() => document.getElementById("al-btn-cerrar")?.focus(), 1000);
-
     } catch (e) {
         console.error("alertas.js: error al mostrar alerta libre", e);
     }
 }
 
 // ==========================================================
-// BOTONES DE ACCIÓN
+// BOTONES
 // ==========================================================
 function verMapaAlerta() {
     try {
         const overlay = document.getElementById("al-overlay");
         overlay?.classList.remove("al-visible");
         overlay?.classList.remove("al-libre");
-
         setTimeout(() => {
             const mapEl = document.getElementById("map");
             if (mapEl) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -869,12 +802,7 @@ function abrirBannerDeNuevo() {
         }
         return;
     }
-
-    if (estado.colaBanners.length > 0) {
-        mostrarSiguienteBanner();
-        return;
-    }
-
+    if (estado.colaBanners.length > 0) { mostrarSiguienteBanner(); return; }
     if (estado.zonasActivas.size > 0) {
         estado.colaBanners = Array.from(estado.zonasActivas.keys());
         estado.colaBanners.sort((a, b) => {
@@ -886,7 +814,6 @@ function abrirBannerDeNuevo() {
         mostrarSiguienteBanner();
         return;
     }
-
     abrirOverlayLibre();
 }
 
@@ -972,32 +899,22 @@ function ocultarTarjeta() {
     tarjeta?.classList.remove("al-visible");
 }
 
-export function cerrarAlerta() {
-    cerrarBannerActual();
-}
+export function cerrarAlerta() { cerrarBannerActual(); }
 
 export function cerrarAlertaTotal() {
     cerrarBanner();
     ocultarBarraSuperior();
     ocultarTarjeta();
     cerrarModalSeguridad();
-    detenerContador();
+    detenerIntervalMaestro();
     detenerSonidoAlerta();
-
     for (const [, capa] of capasRayos.entries()) {
         try { capa.detener(); } catch (e) {}
     }
     capasRayos.clear();
-
-    if (estado.intervalTiempos) {
-        clearInterval(estado.intervalTiempos);
-        estado.intervalTiempos = null;
-    }
-
     estado.zonasActivas.clear();
     estado.colaBanners = [];
     estado.bannerActual = null;
-
     obtenerModuloMapa().then(mod => {
         if (mod && typeof mod.limpiarPoligonosZona === "function") {
             mod.limpiarPoligonosZona();
@@ -1005,10 +922,5 @@ export function cerrarAlertaTotal() {
     }).catch(() => {});
 }
 
-export function hayAlertaActiva() {
-    return estado.zonasActivas.size > 0;
-}
-
-export function obtenerZonasActivas() {
-    return Array.from(estado.zonasActivas.values());
-}
+export function hayAlertaActiva() { return estado.zonasActivas.size > 0; }
+export function obtenerZonasActivas() { return Array.from(estado.zonasActivas.values()); }
