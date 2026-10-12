@@ -1,39 +1,69 @@
 /* css/panico.css
    ============================================================
    Botón de pánico + modal + tarjetas flotantes en admin
+   v2: botón SOS reposicionado debajo del botón de ubicación
    ============================================================ */
 
-/* -------- BOTÓN FLOTANTE (index.html) -------- */
+/* ============================================================
+   BOTÓN SOS (index.html)
+   ------------------------------------------------------------
+   #btn-ubicacion está en:
+       right: 10px; top: 52%;  width/height: 36px;
+   => #btn-panico queda justo debajo:
+       right: 10px; top: calc(52% + 42px);  (36px + 6px gap)
+   ============================================================ */
 #btn-panico {
     position: fixed;
-    /* Subimos el botón para que quede debajo de las tarjetas flotantes */
-    bottom: 140px; 
-    right: 20px;
-    z-index: 1200;
+    right: 10px;
+    top: calc(52% + 42px);   /* 36px (alto del btn-ubicacion) + 6px de separación */
+    z-index: 700;
 
-    width: 54px;
-    height: 54px;
-    border-radius: 50%;
-    border: 3px solid #fff;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 0;
+
     background: linear-gradient(135deg, #e74c3c, #c0392b);
     color: #fff;
-    font-size: 26px;
     cursor: pointer;
-    box-shadow: 0 6px 20px rgba(231, 76, 60, 0.5),
-                0 0 0 0 rgba(231, 76, 60, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+
+    display: grid;
+    place-items: center;
+
+    box-shadow:
+        0 2px 10px rgba(231,76,60,0.35),
+        0 0 0 0 rgba(231,76,60,0.7);
+
+    /* Refuerzos táctiles para móvil */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+
     transition: transform 0.15s ease, box-shadow 0.2s;
     animation: panico-pulso 2s ease-in-out infinite;
 }
 
-#btn-panico:hover { transform: scale(1.08); }
+#btn-panico:hover { transform: scale(1.06); }
 #btn-panico:active { transform: scale(0.94); }
 
+.panico-btn-emoji {
+    font-size: 18px;
+    line-height: 1;
+    pointer-events: none;   /* el emoji no captura el click */
+}
+
 @keyframes panico-pulso {
-    0%, 100% { box-shadow: 0 6px 20px rgba(231,76,60,0.5), 0 0 0 0 rgba(231,76,60,0.7); }
-    50%      { box-shadow: 0 6px 20px rgba(231,76,60,0.5), 0 0 0 18px rgba(231,76,60,0); }
+    0%, 100% {
+        box-shadow:
+            0 2px 10px rgba(231,76,60,0.35),
+            0 0 0 0 rgba(231,76,60,0.7);
+    }
+    50% {
+        box-shadow:
+            0 2px 10px rgba(231,76,60,0.35),
+            0 0 0 10px rgba(231,76,60,0);
+    }
 }
 
 /* -------- OVERLAY + MODAL -------- */
@@ -293,11 +323,6 @@
 .panico-card-btn-mapa:active,
 .panico-card-btn-atender:active { transform: scale(0.97); }
 
-@media (max-width: 600px) {
-    /* Ajuste responsivo para móviles: elevamos el botón para evitar solapamientos con las tarjetas */
-    #btn-panico { width: 48px; height: 48px; font-size: 22px; bottom: 140px; right: 16px; }
-    #panico-admin-contenedor { top: 70px; right: 8px; left: 8px; max-width: none; }
-}
 /* ============================================================
    CONFIRMACIÓN "AYUDA ENVIADA" — persistente 60 s, local
    ============================================================ */
@@ -397,7 +422,33 @@
     background: rgba(255,255,255,0.2);
 }
 
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+/* Pantallas grandes (>=700px): el btn-ubicacion se mueve a right: 18px
+   desde style.css, así que alineamos el SOS con el mismo margen. */
+@media (min-width: 700px) {
+    #btn-panico {
+        right: 18px;
+        top: calc(52% + 42px);
+    }
+}
+
+/* Móvil (<=600px): mantenemos alineación exacta con btn-ubicacion */
 @media (max-width: 600px) {
+    #btn-panico {
+        right: 10px;
+        top: calc(52% + 42px);
+    }
+
+    #panico-admin-contenedor {
+        top: 70px;
+        right: 8px;
+        left: 8px;
+        max-width: none;
+    }
+
     .panico-confirm {
         bottom: 80px;
         right: 10px;
