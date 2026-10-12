@@ -298,3 +298,110 @@
     #btn-panico { width: 48px; height: 48px; font-size: 22px; bottom: 140px; right: 16px; }
     #panico-admin-contenedor { top: 70px; right: 8px; left: 8px; max-width: none; }
 }
+/* ============================================================
+   CONFIRMACIÓN "AYUDA ENVIADA" — persistente 60 s, local
+   ============================================================ */
+.panico-confirm {
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    width: 280px;
+    max-width: calc(100vw - 40px);
+    padding: 14px 16px 12px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #1a4d2e 0%, #0d3520 100%);
+    color: #fff;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    border-left: 5px solid #2ecc71;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.4), 0 0 25px rgba(46,204,113,0.4);
+    z-index: 40000;
+    animation: panico-confirm-in 0.45s cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+@keyframes panico-confirm-in {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.panico-confirm.panico-confirm-out {
+    animation: panico-confirm-out 0.4s ease forwards;
+}
+
+@keyframes panico-confirm-out {
+    to { opacity: 0; transform: translateY(20px); }
+}
+
+.panico-confirm-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.panico-confirm-icono {
+    font-size: 26px;
+    line-height: 1;
+    filter: drop-shadow(0 0 10px rgba(46,204,113,0.7));
+}
+
+.panico-confirm-titulo {
+    font-size: 15px;
+    font-weight: 700;
+    color: #a8e6c4;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.panico-confirm-sub {
+    font-size: 11px;
+    color: #c8f0d4;
+    opacity: 0.85;
+    margin-top: 2px;
+}
+
+.panico-confirm-countdown {
+    font-size: 11px;
+    color: #8fd9a8;
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(46,204,113,0.25);
+    text-align: center;
+    opacity: 0.85;
+}
+
+.panico-confirm-countdown strong {
+    color: #fff;
+    font-weight: 700;
+}
+
+.panico-confirm-cerrar {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: #fff;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+
+.panico-confirm-cerrar:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+@media (max-width: 600px) {
+    .panico-confirm {
+        bottom: 80px;
+        right: 10px;
+        width: calc(100vw - 20px);
+        max-width: 340px;
+    }
+}
