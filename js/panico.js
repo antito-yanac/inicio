@@ -26,7 +26,7 @@ const COLECCION_PANICO = "panico_solicitudes";
 
 // WhatsApp (CallMeBot)
 const CALLMEBOT_PHONE  = "+51964125058";
-const CALLMEBOT_APIKEY = "TU_API_KEY_AQUI";   // ← pega tu API key aquí
+const CALLMEBOT_APIKEY = "9034887";   // ← pega tu API key aquí
 
 // GPS cache
 const GPS_CACHE_KEY        = "keraunos_gps_cache";
@@ -501,7 +501,7 @@ function mostrarConfirmacionEnviada() {
 // WhatsApp (CallMeBot)
 // ------------------------------------------------------------
 function enviarWhatsApp(dni, telefono, descripcion, lat, lng) {
-    if (!CALLMEBOT_APIKEY || CALLMEBOT_APIKEY === "TU_API_KEY_AQUI") {
+    if (!CALLMEBOT_APIKEY || CALLMEBOT_APIKEY === "9034887") {
         console.warn("panico: CallMeBot no configurado. Se omite WhatsApp.");
         return;
     }
