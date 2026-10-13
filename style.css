@@ -812,7 +812,9 @@ body {
     .leaflet-bottom.leaflet-right {
         margin-bottom: 130px;
     }
-
+    .info {
+       display: none !important
+    }
     /* La barra de filtros no debe crecer más que el buscador */
     .filter-bar {
         max-width: 100%;
@@ -834,7 +836,12 @@ body {
         height: 12px;
     }
 }
-
+/*borrame*/
+@media (pointer: coarse), (hover: none){
+   .info{
+      display: none !important
+   }
+}
 
 /* ============================================================
    ANIMACIONES DE ALERTA (rayo + radar)
